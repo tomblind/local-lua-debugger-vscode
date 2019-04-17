@@ -11,6 +11,7 @@
 	"author": "tomb@noreply.github.com",
 	"license": "MIT",
 	"devDependencies": {
+		"@types/node": "^11.13.4",
 		"tslint": "^5.15.0",
 		"tslint-eslint-rules": "^5.4.0",
 		"typescript": "^3.4.3",

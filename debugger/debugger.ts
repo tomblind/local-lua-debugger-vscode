@@ -17,10 +17,34 @@ interface Locals {
     [name: string]: Local;
 }
 
-namespace Breakpoint {
-    let current: Breakpoint[] = [];
+interface LuaTypeMap {
+    nil: undefined;
+    number: number;
+    string: string;
+    boolean: boolean;
+    table: object;
+    function: Function;
+    thread: LuaThread;
+    userdata: LuaUserData;
+}
 
-    export function get(file: string, line: number): Breakpoint | undefined {
+function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val is LuaTypeMap[T] {
+    return type(val) === luaTypeName;
+}
+
+function formatPath(pathStr: string) {
+    const firstChar = pathStr.sub(1, 1);
+    if (firstChar === "@" || firstChar === "=") {
+        pathStr = pathStr.sub(2);
+    }
+    [pathStr] = pathStr.gsub("\\", "/");
+    return pathStr;
+}
+
+namespace Breakpoint {
+    let current: LuaDebug.Breakpoint[] = [];
+
+    export function get(file: string, line: number): LuaDebug.Breakpoint | undefined {
         for (const [_, breakpoint] of ipairs(current)) {
             if (breakpoint.file === file && breakpoint.line === line) {
                 return breakpoint;
@@ -29,12 +53,12 @@ namespace Breakpoint {
         return undefined;
     }
 
-    export function getAll(): Breakpoint[] {
+    export function getAll(): LuaDebug.Breakpoint[] {
         return current;
     }
 
     function makeFilePattern(file: string) {
-        file = Format.path(file);
+        file = formatPath(file);
         [file] = file.gsub("%.", "%.");
         file = file + "$";
         return file;
@@ -222,6 +246,7 @@ namespace SourceMap
 
 namespace Format {
     const indentStr = "  ";
+
     const escapes: Record<string, string> = {
         ["\n"]: "\\n",
         ["\r"]: "\\r",
@@ -235,6 +260,7 @@ namespace Format {
     for (const [e] of pairs(escapes)) {
         escapesPattern += e;
     }
+    escapesPattern = `[${escapesPattern}]`;
 
     function transformEscape(e: string) {
         return escapes[e];
@@ -245,61 +271,13 @@ namespace Format {
         return escaped;
     }
 
-    export function path(pathStr: string) {
-        const firstChar = pathStr.sub(1, 1);
-        if (firstChar === "@" || firstChar === "=") {
-            pathStr = pathStr.sub(2);
-        }
-        [pathStr] = pathStr.gsub("\\", "/");
-        return pathStr;
-    }
-
-    function formatLuaKey(key: string, indent: number, tables: {[t: string]: boolean}) {
-        if (type(key) === "string") {
-            const [validIdentifier] = key.match("^[a-zA-Z_][a-zA-Z0-9_]*$");
-            if (validIdentifier !== undefined) {
-                return key;
-            }
-        }
-        return `["${escape(key)}"]`;
-    }
-
-    export function formatAsLua(val: unknown, indent = 0, tables?: {[t: string]: boolean}) {
-        tables = tables || {};
-        const valType = type(val);
-        if (valType === "table" && !tables[val as keyof typeof tables]) {
-            tables[val as keyof typeof tables] = true;
-
-            const kvps: string[] = [];
-            for (const [_, v] of ipairs(val as unknown[])) {
-                const valStr = formatAsLua(v, indent + 1, tables);
-                table.insert(kvps, `\n${indentStr.rep(indent + 1)}${valStr}`);
-            }
-            for (const [k, v] of pairs(val as object)) {
-                const keyType = type(k);
-                if (keyType !== "number" || (k as number) > (val as unknown[]).length) {
-                    const keyStr = formatLuaKey(k, indent, tables);
-                    const valStr = formatAsLua(v, indent + 1, tables);
-                    table.insert(kvps, `\n${indentStr.rep(indent + 1)}${keyStr} = ${valStr}`);
-                }
-            }
-            return (kvps.length > 0) ? `{${table.concat(kvps, ",")}\n${indentStr.rep(indent)}}` : "{}";
-
-        } else if (valType === "number" || valType === "boolean") {
-            return tostring(val);
-
-        } else {
-            return `"${escape(tostring(val))}"`;
-        }
-    }
-
     function isArray(val: unknown) {
         const len = (val as unknown[]).length;
         if (len === 0) {
             return false;
         }
         for (const [k] of pairs(val as object)) {
-            if (type(k) !== "number" || (k as number) > len) {
+            if (!isType(k, "number") || k > len) {
                 return false;
             }
         }
@@ -309,8 +287,8 @@ namespace Format {
     export function formatAsJson(val: unknown, indent = 0, tables?: {[t: string]: boolean}) {
         tables = tables || {};
         const valType = type(val);
-        if (valType === "table" && !tables[val as keyof typeof tables]) {
-            tables[val as keyof typeof tables] = true;
+        if (valType === "table" && tables[val as string] !== undefined) {
+            tables[val as string] = true;
 
             if (isArray(val)) {
                 const arrayVals: string[] = [];
@@ -336,53 +314,52 @@ namespace Format {
             return `"${escape(tostring(val))}"`;
         }
     }
-
-    export let format = formatAsJson;
 }
 
 namespace Send {
     export function error(err: string) {
-        const errorObj: Error = {error: err};
-        print(Format.format(errorObj));
+        const errorObj: LuaDebug.Error = {error: err};
+        print(Format.formatAsJson(errorObj));
     }
 
-    export function debugBreak(msg: string) {
-        print(Format.format({debugBreak: msg}));
+    export function debugBreak(message: string, breakType: LuaDebug.DebugBreak["debugBreak"]["type"]) {
+        const debugBreakObj: LuaDebug.DebugBreak = {debugBreak: {message, type: breakType}};
+        print(Format.formatAsJson(debugBreakObj));
     }
 
     export function result(value: unknown) {
-        const resultObj: Result = {result: value};
-        print(Format.format(resultObj));
+        const resultObj: LuaDebug.Result = {result: value};
+        print(Format.formatAsJson(resultObj));
     }
 
-    export function frames(frameList: Frame[]) {
-        const stackObj: Stack = {frames: frameList};
-        print(Format.format(stackObj));
+    export function frames(frameList: LuaDebug.Frame[]) {
+        const stackObj: LuaDebug.Stack = {frames: frameList};
+        print(Format.formatAsJson(stackObj));
     }
 
     export function locals(locs: Locals) {
-        const variablesObj: Variables = {variables: []};
+        const variablesObj: LuaDebug.Variables = {variables: []};
         for (const [name, info] of pairs(locs)) {
             table.insert(variablesObj.variables, {name, type: info.type});
         }
-        print(Format.format(variablesObj));
+        print(Format.formatAsJson(variablesObj));
     }
 
     export function vars(varsObj: Vars) {
-        const variablesObj: Variables = {variables: []};
+        const variablesObj: LuaDebug.Variables = {variables: []};
         for (const [name, info] of pairs(varsObj)) {
             table.insert(variablesObj.variables, {name, type: info.type});
         }
-        print(Format.format(variablesObj));
+        print(Format.formatAsJson(variablesObj));
     }
 
-    export function breakpoints(breaks: Breakpoint[]) {
-        const breakpointsObj: Breakpoints = {breakpoints: breaks};
-        print(Format.format(breakpointsObj));
+    export function breakpoints(breaks: LuaDebug.Breakpoint[]) {
+        const breakpointsObj: LuaDebug.Breakpoints = {breakpoints: breaks};
+        print(Format.formatAsJson(breakpointsObj));
     }
 
     export function help(helpStrs: string[]) {
-        print(Format.format(helpStrs));
+        print(Format.formatAsJson(helpStrs));
     }
 }
 
@@ -415,11 +392,11 @@ namespace Debugger {
     }
 
     function backtrace(stack: debug.FunctionInfo[], frameIndex: number) {
-        const frames: Frame[] = [];
+        const frames: LuaDebug.Frame[] = [];
         for (let i = 0; i < stack.length; ++i) {
             const info = stack[i];
-            const frame: Frame = {
-                source: info.source && Format.path(info.source) || "?",
+            const frame: LuaDebug.Frame = {
+                source: info.source && formatPath(info.source) || "?",
                 line: info.currentline && assert(tonumber(info.currentline)) || -1
             };
             if (info.source && info.currentline) {
@@ -499,7 +476,7 @@ namespace Debugger {
         backtrace(stack, frame);
         while (true) {
             const inp = getInput();
-            if (inp === undefined || type(inp) === "number" || inp === "cont" || inp === "continue") {
+            if (inp === "cont" || inp === "continue") {
                 break;
 
             } else if (inp === "help") {
@@ -575,7 +552,7 @@ namespace Debugger {
                 const [cmd] = inp.match("^break%s+([a-z]+)");
                 let file: string | undefined;
                 let line: number | undefined;
-                let breakpoint: Breakpoint | undefined;
+                let breakpoint: LuaDebug.Breakpoint | undefined;
                 if (cmd === "set"
                     || cmd === "del"
                     || cmd === "delete"
@@ -587,7 +564,7 @@ namespace Debugger {
                     let lineStr: string | undefined;
                     [file, lineStr] = inp.match("^break%s+[a-z]+%s+([^:]+):(%d+)$");
                     if (file !== undefined && lineStr !== undefined) {
-                        file = Format.path(file);
+                        file = formatPath(file);
                         line = assert(tonumber(lineStr));
                         breakpoint = Breakpoint.get(file, line);
                     }
@@ -755,7 +732,7 @@ namespace Debugger {
             return;
         }
 
-        const source = Format.path(assert(info.source));
+        const source = formatPath(assert(info.source));
         const sourceMap = SourceMap.get(source);
         const lineMapping = sourceMap && sourceMap[info.currentline];
         // tslint:disable-next-line: no-non-null-assertion
@@ -772,7 +749,7 @@ namespace Debugger {
                 }
 
                 if (fileMatch !== undefined) {
-                    Send.debugBreak(`breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`);
+                    Send.debugBreak(`breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`, "breakpoint");
                     debugBreak(stack);
                     break;
                 }
@@ -822,22 +799,22 @@ debug.traceback = function(
 ) {
     let message: string | undefined;
     let traceback: string;
-    if (type(threadOrMessage) === "thread") {
+    if (isType(threadOrMessage, "thread")) {
         if (messageOrLevel) {
             message = Debugger.mapSources(messageOrLevel as string);
         }
-        traceback =  Debugger.mapSources(debugTraceback(threadOrMessage as LuaThread, message, level));
+        traceback =  Debugger.mapSources(debugTraceback(threadOrMessage, message, level));
 
     } else {
         if (threadOrMessage) {
-            message = Debugger.mapSources(threadOrMessage as string);
+            message = Debugger.mapSources(threadOrMessage);
         }
         traceback = Debugger.mapSources(debugTraceback(message, messageOrLevel as number | undefined));
     }
 
     const stack = Debugger.getStack();
     if (stack) {
-        Send.debugBreak(message && ("error: " + message) || "error");
+        Send.debugBreak(message && ("error: " + message) || "error", "error");
         Debugger.debugBreak(stack);
     }
     return traceback;
@@ -849,9 +826,7 @@ export function requestBreak() {
 }
 
 //Start debugger
-export function start(breakImmediately = true, useJson = false) {
-    Format.format = useJson && Format.formatAsJson || Format.formatAsLua;
-
+export function start(breakImmediately = true) {
     Debugger.setHook();
 
     if (breakImmediately) {

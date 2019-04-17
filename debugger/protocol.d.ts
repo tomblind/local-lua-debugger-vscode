@@ -1,40 +1,49 @@
-interface Error {
-	error: string;
-}
+declare namespace LuaDebug {
+    interface Error {
+        error: string;
+    }
 
-interface Result {
-	result: unknown;
-}
+    interface DebugBreak {
+        debugBreak: {
+            message: string;
+            type: "breakpoint" | "error";
+        }
+    }
 
-interface Frame {
-    source: string;
-    line: number;
-    func?: string;
-    active?: boolean;
-    mappedSource?: string;
-    mappedLine?: number;
-}
+    interface Result {
+        result: unknown;
+    }
 
-interface Stack {
-	frames: Frame[];
-}
+    interface Frame {
+        source: string;
+        line: number;
+        func?: string;
+        active?: boolean;
+        mappedSource?: string;
+        mappedLine?: number;
+    }
 
-interface Variable {
-	name: string;
-	type: string;
-}
+    interface Stack {
+        frames: Frame[];
+    }
 
-interface Variables {
-	variables: Variable[];
-}
+    interface Variable {
+        name: string;
+        type: string;
+    }
 
-interface Breakpoint {
-    line: number;
-    file: string;
-    pattern: string;
-    enabled: boolean;
-}
+    interface Variables {
+        variables: Variable[];
+    }
 
-interface Breakpoints {
-	breakpoints: Breakpoint[];
+    interface Breakpoint {
+        line: number;
+        file: string;
+        pattern: string;
+        enabled: boolean;
+    }
+
+    interface Breakpoints {
+        breakpoints: Breakpoint[];
+    }
 }
