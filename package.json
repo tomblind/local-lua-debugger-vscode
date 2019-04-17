@@ -1,0 +1,85 @@
+{
+	"name": "local-lua-debugger-vscode",
+	"version": "0.1.0",
+	"description": "Local Lua Debugger VSCode Extension",
+	"scripts": {
+		"build-debugger": "tstl -p debugger",
+		"build-extension": "tsc -p extension",
+		"build": "npm run build-debugger && npm run build-extension",
+		"clean:win": "if exist out rmdir /S /Q out"
+	},
+	"author": "tomb@noreply.github.com",
+	"license": "MIT",
+	"devDependencies": {
+		"tslint": "^5.15.0",
+		"tslint-eslint-rules": "^5.4.0",
+		"typescript": "^3.4.3",
+		"typescript-to-lua": "^0.18.0",
+		"vscode": "^1.1.33"
+	},
+	"dependencies": {
+		"vscode-debugadapter": "^1.34.0"
+	},
+	"main": "./out/extension",
+	"activationEvents": [
+		"onDebug"
+	],
+	"contributes": {
+		"breakpoints": [
+			{
+				"language": "lua"
+			}
+		],
+		"debuggers": [
+			{
+				"type": "lua",
+				"label": "Local Lua Debugger",
+				"program": "./out/debugAdapter.js",
+				"runtime": "node",
+				"configurationAttributes": {
+					"launch": {
+						"properties": {
+							"lua": {
+								"type": "string",
+								"description": "The Lua executable to use.",
+								"default": "lua"
+							},
+							"file": {
+								"type": "string",
+								"description": "The .lua file to pass to lua to start the program.",
+								"default": "${file}"
+							},
+							"executable": {
+								"type": "string",
+								"description": "The custom executable to run.",
+								"default": ""
+							},
+							"args": {
+								"type": "array",
+								"description": "Arguments to pass to the custom executable.",
+								"default": [],
+								"items": {
+									"type": "string"
+								}
+							}
+						},
+						"oneOf": [
+							{
+								"required": [
+									"lua",
+									"file"
+								]
+							},
+							{
+								"required": [
+									"executable",
+									"args"
+								]
+							}
+						]
+					}
+				}
+			}
+		]
+	}
+}

@@ -1,0 +1,19 @@
+{
+	"compilerOptions":
+	{
+		"target": "es6",
+		"strict": true,
+		"keyofStringsOnly": true,
+		"typeRoots": ["./luatypes"],
+		"types": ["esnone", "lua51"],
+		"noLib": true,
+		"outDir": "../out",
+		// "sourceMap": true
+	},
+	"include": ["./debugger.ts"],
+	"tstl":
+	{
+		"luaTarget": "5.1",
+		"noHeader": true
+	}
+}
