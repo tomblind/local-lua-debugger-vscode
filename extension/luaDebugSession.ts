@@ -1,3 +1,4 @@
+/// <reference path = "../debugger/protocol.d.ts" />
 import {DebugProtocol} from "vscode-debugprotocol";
 import {
     Breakpoint,
@@ -83,8 +84,6 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
-
-        // runtime supports now threads so just return a default thread.
         response.body = {threads: [new Thread(1, "thread 1")]};
         this.sendResponse(response);
     }

@@ -10,7 +10,9 @@
 		"outDir": "../out",
 		// "sourceMap": true
 	},
-	"include": ["./debugger.ts"],
+	"include": [
+		"./**/*.ts"
+	],
 	"tstl":
 	{
 		"luaTarget": "5.1",

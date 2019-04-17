@@ -17,22 +17,6 @@ interface Locals {
     [name: string]: Local;
 }
 
-interface Frame {
-    source: string;
-    line: number;
-    func?: string;
-    active?: boolean;
-    mappedSource?: string;
-    mappedLine?: number;
-}
-
-interface Breakpoint {
-    line: number;
-    file: string;
-    pattern: string;
-    enabled: boolean;
-}
-
 namespace Breakpoint {
     let current: Breakpoint[] = [];
 
@@ -358,7 +342,8 @@ namespace Format {
 
 namespace Send {
     export function error(err: string) {
-        print(Format.format({error: err}));
+        const errorObj: Error = {error: err};
+        print(Format.format(errorObj));
     }
 
     export function debugBreak(msg: string) {
@@ -366,42 +351,38 @@ namespace Send {
     }
 
     export function result(value: unknown) {
-        print(Format.format({result: value}));
+        const resultObj: Result = {result: value};
+        print(Format.format(resultObj));
     }
 
     export function frames(frameList: Frame[]) {
-        print(Format.format(frameList));
+        const stackObj: Stack = {frames: frameList};
+        print(Format.format(stackObj));
     }
 
     export function locals(locs: Locals) {
-        const locTable: { [name: string]: { type: string } } = {};
+        const variablesObj: Variables = {variables: []};
         for (const [name, info] of pairs(locs)) {
-            locTable[name] = {type: info.type};
+            table.insert(variablesObj.variables, {name, type: info.type});
         }
-        print(Format.format(locTable));
+        print(Format.format(variablesObj));
     }
 
     export function vars(varsObj: Vars) {
-        const varTable: { [name: string]: { type: string } } = {};
+        const variablesObj: Variables = {variables: []};
         for (const [name, info] of pairs(varsObj)) {
-            varTable[name] = {type: info.type};
+            table.insert(variablesObj.variables, {name, type: info.type});
         }
-        print(Format.format(varTable));
+        print(Format.format(variablesObj));
     }
 
     export function breakpoints(breaks: Breakpoint[]) {
-        const breakStrs: string[] = [];
-        for (const [_, breakpoint] of ipairs(breaks)) {
-            table.insert(
-                breakStrs,
-                `${breakpoint.file}:${breakpoint.line} (${breakpoint.enabled ? "enabled" : "disabled"})`
-            );
-        }
-        print(Format.format(breakStrs));
+        const breakpointsObj: Breakpoints = {breakpoints: breaks};
+        print(Format.format(breakpointsObj));
     }
 
     export function help(helpStrs: string[]) {
-        print(Format.format({help: helpStrs}));
+        print(Format.format(helpStrs));
     }
 }
 
@@ -504,6 +485,12 @@ namespace Debugger {
 
     let breakAtDepth = 0;
 
+    export function getInput() {
+        io.stdout.write("> ");
+        const inp = io.stdin.read("*l");
+        return inp;
+    }
+
     export function debugBreak(stack: debug.FunctionInfo[]) {
         breakAtDepth = 0;
         const frameOffset = 3;
@@ -511,8 +498,7 @@ namespace Debugger {
         let info = stack[frame];
         backtrace(stack, frame);
         while (true) {
-            io.stdout.write("> ");
-            const inp = io.stdin.read("*l");
+            const inp = getInput();
             if (inp === undefined || type(inp) === "number" || inp === "cont" || inp === "continue") {
                 break;
 
