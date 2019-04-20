@@ -1,38 +1,63 @@
 import * as vscode from "vscode";
+import * as Net from "net";
+import {LuaDebugSession} from "./luaDebugSession";
 
-interface Config extends vscode.DebugConfiguration {
-    program: LuaProgramConfig | CustomProgramConfig;
-}
-
-const configTypeName = "lualdbg";
+const enableServer = true;
 
 const configurationProvider: vscode.DebugConfigurationProvider = {
     resolveDebugConfiguration(
         folder: vscode.WorkspaceFolder | undefined,
-        config: Config,
+        config: vscode.DebugConfiguration,
         token?: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.DebugConfiguration> {
-        if (config.type !== undefined && config.request !== undefined && config.name !== undefined) {
-            const editor = vscode.window.activeTextEditor;
-            if (editor !== undefined && editor.document.languageId === "lua") {
-                config.type = configTypeName;
-                config.name = "Launch";
-                config.request = "launch";
-                config.program = {lua: "lua", file: "${file}"};
-                config.stopOnEntry = true;
-            }
+        const extension = vscode.extensions.getExtension("tom-blind.local-lua-debugger-vscode");
+        config.extensionPath = extension !== undefined ? `${extension.extensionPath}/out` : ".";
+        if (config.cwd === undefined) {
+            config.cwd = folder !== undefined ? folder.uri : ".";
         }
-
-        if (config.program !== undefined) {
-            return vscode.window.showInformationMessage("Cannot find a program to debug").then(_ => undefined);
-        }
-
         return config;
     }
 };
 
+let debugAdapaterDescriptorFactory: (vscode.DebugAdapterDescriptorFactory & { dispose(): void }) | undefined;
+if (enableServer) {
+    let server: Net.Server | undefined;
+
+    debugAdapaterDescriptorFactory = {
+        createDebugAdapterDescriptor(
+            session: vscode.DebugSession,
+            executable: vscode.DebugAdapterExecutable | undefined
+        ): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
+            if (server === undefined) {
+                server = Net.createServer(socket => {
+                    const debugSession = new LuaDebugSession();
+                    debugSession.setRunAsServer(true);
+                    debugSession.start(socket as NodeJS.ReadableStream, socket);
+                }).listen(0);
+            }
+            return new vscode.DebugAdapterServer((server.address() as Net.AddressInfo).port);
+        },
+
+        dispose() {
+            if (server !== undefined) {
+                server.close();
+                server = undefined;
+            }
+        }
+    };
+}
+
 export function activate(context: vscode.ExtensionContext) {
-    context.subscriptions.push(vscode.debug.registerDebugConfigurationProvider(configTypeName, configurationProvider));
+    context.subscriptions.push(
+        vscode.debug.registerDebugConfigurationProvider("local-lua-debugger", configurationProvider)
+    );
+
+    if (debugAdapaterDescriptorFactory !== undefined) {
+        context.subscriptions.push(
+            vscode.debug.registerDebugAdapterDescriptorFactory("local-lua-debugger", debugAdapaterDescriptorFactory)
+        );
+        context.subscriptions.push(debugAdapaterDescriptorFactory);
+    }
 }
 
 export function deactivate() {

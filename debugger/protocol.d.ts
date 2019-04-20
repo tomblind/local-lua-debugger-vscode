@@ -1,16 +1,23 @@
 declare namespace LuaDebug {
-    interface Error {
+    type Tag = "$luaDebug";
+
+    interface MessageBase {
+        tag: Tag;
+    }
+
+    interface Error extends MessageBase {
+        type: "error";
         error: string;
     }
 
-    interface DebugBreak {
-        debugBreak: {
-            message: string;
-            type: "breakpoint" | "error";
-        }
+    interface DebugBreak extends MessageBase {
+        type: "debugBreak";
+        message: string;
+        breakType: "breakpoint" | "error";
     }
 
-    interface Result {
+    interface Result extends MessageBase {
+        type: "result";
         result: unknown;
     }
 
@@ -23,16 +30,31 @@ declare namespace LuaDebug {
         mappedLine?: number;
     }
 
-    interface Stack {
+    interface Stack extends MessageBase {
+        type: "stack";
         frames: Frame[];
     }
 
-    interface Variable {
+    interface TableRef {
         name: string;
-        type: string;
+        index: number;
     }
 
-    interface Variables {
+    interface Value {
+        name: string;
+        type: string;
+        value?: string;
+    }
+
+    type Variable = Value | TableRef;
+
+    interface Table {
+        properties: Variable[];
+    }
+
+    interface Variables extends MessageBase {
+        type: "variables";
+        tables: Table[];
         variables: Variable[];
     }
 
@@ -43,7 +65,10 @@ declare namespace LuaDebug {
         enabled: boolean;
     }
 
-    interface Breakpoints {
+    interface Breakpoints extends MessageBase {
+        type: "breakpoints";
         breakpoints: Breakpoint[];
     }
+
+    type Message = Error | DebugBreak | Result | Stack | Variables | Breakpoints;
 }

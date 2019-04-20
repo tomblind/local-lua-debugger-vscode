@@ -1,5 +1,6 @@
 {
 	"name": "local-lua-debugger-vscode",
+	"publisher": "tom-blind",
 	"version": "0.1.0",
 	"description": "Local Lua Debugger VSCode Extension",
 	"scripts": {
@@ -22,6 +23,10 @@
 		"vscode-debugadapter": "^1.34.0"
 	},
 	"main": "./out/extension",
+	"engines": {
+		"vscode": "^1.30.0-insider",
+		"node": "^8.9.3"
+	},
 	"activationEvents": [
 		"onDebug"
 	],
@@ -33,13 +38,18 @@
 		],
 		"debuggers": [
 			{
-				"type": "lua",
+				"type": "local-lua-debugger",
 				"label": "Local Lua Debugger",
 				"program": "./out/debugAdapter.js",
 				"runtime": "node",
 				"configurationAttributes": {
 					"launch": {
 						"properties": {
+							"cwd": {
+								"type": "string",
+								"description": "Working directory to launch lua/executable in.",
+								"default": "${workspaceFolder}"
+							},
 							"lua": {
 								"type": "string",
 								"description": "The Lua executable to use.",
