@@ -11,7 +11,8 @@ import {
     OutputEvent,
     TerminatedEvent,
     StoppedEvent,
-    Variable
+    Variable,
+    Handles
 } from "vscode-debugadapter";
 import * as child_process from "child_process";
 import {Message} from "./message";
@@ -20,6 +21,7 @@ import * as fs from "fs";
 
 type LaunchRequestArguments = DebugProtocol.LaunchRequestArguments & (LuaProgramConfig | CustomProgramConfig) & {
     cwd?: string;
+    env?: NodeJS.ProcessEnv;
     extensionPath?: string;
 };
 
@@ -35,8 +37,14 @@ interface MessageHandler<T extends LuaDebug.Message = LuaDebug.Message> {
     (msg: T): void;
 }
 
-function isTableRef(variable: LuaDebug.Variable): variable is LuaDebug.TableRef {
-    return (variable as LuaDebug.TableRef).index !== undefined;
+function getEnvKey(env: NodeJS.ProcessEnv, searchKey: string) {
+    const upperSearchKey = searchKey.toUpperCase();
+    for (const key in env) {
+        if (key.toUpperCase() === upperSearchKey) {
+            return key;
+        }
+    }
+    return searchKey;
 }
 
 const enum ScopeType {
@@ -45,9 +53,6 @@ const enum ScopeType {
     Global
 }
 
-const scopeShift = 29;
-const scopeMask = 3 << scopeShift;
-
 const mainThreadId = 1;
 
 export class LuaDebugSession extends LoggingDebugSession {
@@ -55,18 +60,9 @@ export class LuaDebugSession extends LoggingDebugSession {
     private process?: child_process.ChildProcess;
     private cwd?: string;
     private outputText = "";
-
     private onConfigurationDone?: () => void;
-
-    private readonly handlers: { [T in MessageTypeName]?: MessageHandler<MessageTypeOf<T>>; } = {
-        debugBreak: msg => {
-            if (msg.breakType === "error") {
-                this.sendEvent(new StoppedEvent("exception", mainThreadId, msg.message));
-            } else {
-                this.sendEvent(new StoppedEvent("breakpoint", mainThreadId));
-            }
-        }
-    };
+    private readonly messageHandlerQueue: MessageHandler[] = [];
+    private readonly variableHandles = new Handles<string>(ScopeType.Global + 1);
 
     public constructor() {
         super("lldbg-log.txt");
@@ -110,21 +106,27 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (isLuaProgramConfig(args)) {
             this.cwd = this.assert(args.cwd);
             const options/* : child_process.SpawnOptions */ = {
-                env: {} as NodeJS.ProcessEnv,
+                env: Object.assign({}, process.env),
                 cwd: this.cwd,
                 shell: true
             };
-            for (const key in process.env) {
-                options.env[key.toUpperCase()] = process.env[key];
+
+            if (args.env!== undefined) {
+                for (const key in args.env) {
+                    const envKey = getEnvKey(options.env, key);
+                    options.env[envKey] = args.env[key];
+                }
             }
 
-            const extensionPath = this.assert(args.extensionPath);
-            const luaPath = `${extensionPath}/?.lua`;
-            if (options.env.LUA_PATH !== undefined && options.env.LUA_PATH.length > 0) {
-                options.env.LUA_PATH = `${options.env.LUA_PATH};${luaPath}`;
-            } else {
-                options.env.LUA_PATH = luaPath;
+            const luaPathKey = getEnvKey(options.env, "LUA_PATH");
+            let luaPath = options.env[luaPathKey];
+            if (luaPath === undefined) {
+                luaPath = "";
+            } else if (luaPath.length > 0 && !luaPath.endsWith(";")) {
+                luaPath += ";";
             }
+            options.env[luaPathKey] = luaPath + `${this.assert(args.extensionPath)}/?.lua`;
+
             this.process = child_process.spawn(
                 args.lua,
                 ["-e", `"require('debugger').start([[${args.file}]])"`],
@@ -175,7 +177,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         this.sendCommand("stack");
 
-        const msg = await this.waitForMessages("stack", "error");
+        const msg = await this.waitForMessage();
 
         const startFrame = args.startFrame !== undefined ? args.startFrame : 0;
         const maxLevels = args.levels !== undefined ? args.levels : 100;
@@ -220,81 +222,47 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    private localVariables?: LuaDebug.Variables;
-    private upvalueVariables?: LuaDebug.Variables;
-    private globalVariables?: LuaDebug.Variables;
-
     protected async variablesRequest(
         response: DebugProtocol.VariablesResponse,
         args: DebugProtocol.VariablesArguments
     ) {
-        let luaVariables: LuaDebug.Variable[] | undefined;
-        let scopeFlags = 0;
+        let cmd: string | undefined;
+        let baseName: string | undefined;
 
         switch (args.variablesReference) {
         case ScopeType.Local:
+            cmd = "locals";
             this.sendEvent(new OutputEvent(`[request] variablesRequest locals`));
-            scopeFlags = ScopeType.Local << scopeShift;
-            this.sendCommand("locals");
-            const locals = await this.waitForMessages("variables", "error");
-            if (locals.type === "variables") {
-                luaVariables = locals.variables;
-                this.localVariables = locals;
-            } else {
-                this.localVariables = undefined;
-            }
             break;
 
         case ScopeType.Upvalue:
+            cmd = "ups";
             this.sendEvent(new OutputEvent("[request] variablesRequest ups"));
-            scopeFlags = ScopeType.Upvalue << scopeShift;
-            this.sendCommand("ups");
-            const ups = await this.waitForMessages("variables", "error");
-            if (ups.type === "variables") {
-                luaVariables = ups.variables;
-                this.upvalueVariables = ups;
-            } else {
-                this.upvalueVariables = undefined;
-            }
             break;
 
         case ScopeType.Global:
+            cmd = "globals";
             this.sendEvent(new OutputEvent("[request] variablesRequest globals"));
-            scopeFlags = ScopeType.Global << scopeShift;
-            this.sendCommand("globals");
-            const globals = await this.waitForMessages("variables", "error");
-            if (globals.type === "variables") {
-                luaVariables = globals.variables;
-                this.globalVariables = globals;
-            } else {
-                this.globalVariables = undefined;
-            }
             break;
 
         default:
-            const scopeType = (args.variablesReference & scopeMask) >> scopeShift;
-            const index = args.variablesReference & (~scopeMask);
-            if (scopeType === ScopeType.Local) {
-                scopeFlags = ScopeType.Local << scopeShift;
-                luaVariables = this.assert(this.assert(this.localVariables).tables[index - 1]).properties;
-            } else if (scopeType === ScopeType.Upvalue) {
-                scopeFlags = ScopeType.Upvalue << scopeShift;
-                luaVariables = this.assert(this.assert(this.upvalueVariables).tables[index - 1]).properties;
-            } else {
-                luaVariables = this.assert(this.assert(this.globalVariables).tables[index - 1]).properties;
-            }
-            scopeFlags = scopeType << scopeShift;
-            this.sendEvent(new OutputEvent(`[request] variablesRequest ${scopeType === ScopeType.Local ? "local" : scopeType === ScopeType.Upvalue ? "up" : "global"} ${index}`));
+            baseName = this.assert(this.variableHandles.get(args.variablesReference));
+            cmd = `props ${baseName}`;
+            this.sendEvent(new OutputEvent(`[request] variablesRequest ${baseName}`));
             break;
         }
 
+        this.sendCommand(cmd);
+        const vars = await this.waitForMessage();
+
         const variables: Variable[] = [];
-        if (luaVariables !== undefined) {
-            for (const variable of luaVariables) {
+        if (vars.type === "variables") {
+            for (const variable of vars.variables) {
                 let value: string;
                 let ref: number | undefined;
-                if (isTableRef(variable)) {
-                    ref = variable.index | scopeFlags;
+                if (variable.type === "table") {
+                    const name = baseName !== undefined ? `${baseName}.${variable.name}` : variable.name;
+                    ref = this.variableHandles.create(name);
                     value = "[table]";
                 } else if (variable.value === undefined) {
                     value = `[${variable.type}]`;
@@ -311,47 +279,71 @@ export class LuaDebugSession extends LoggingDebugSession {
 
     protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
         this.sendEvent(new OutputEvent("[request] continueRequest"));
+        this.variableHandles.reset();
         this.sendCommand("cont");
         this.sendResponse(response);
     }
 
     protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
         this.sendEvent(new OutputEvent("[request] nextRequest"));
+        this.variableHandles.reset();
         this.sendCommand("step");
         this.sendResponse(response);
     }
 
     protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
         this.sendEvent(new OutputEvent("[request] stepInRequest"));
+        this.variableHandles.reset();
         this.sendCommand("stepin");
         this.sendResponse(response);
     }
 
     protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
         this.sendEvent(new OutputEvent("[request] stepOutRequest"));
+        this.variableHandles.reset();
         this.sendCommand("stepout");
         this.sendResponse(response);
     }
 
-    protected setVariableRequest(
+    protected async setVariableRequest(
         response: DebugProtocol.SetVariableResponse,
         args: DebugProtocol.SetVariableArguments
-    ): void {
-        // TODO : set var
-        this.sendEvent(new OutputEvent("[request] setVariableRequest"));
+    ) {
+        this.sendEvent(new OutputEvent(`[request] setVariableRequest ${args.name} = ${args.value}`));
+
+        this.sendCommand(`exec ${args.name} = ${args.value}; return ${args.name}`);
+
+        const [value, variableReference] = await this.evaluate(args.value);
+
+        response.body = {value, variablesReference: variableReference};
         this.sendResponse(response);
     }
 
-    protected evaluateRequest(response: DebugProtocol.EvaluateResponse, args: DebugProtocol.EvaluateArguments): void {
-        // const ctx = args.context;
-        // const exp = args.expression;
+    protected async evaluateRequest(
+        response: DebugProtocol.EvaluateResponse,
+        args: DebugProtocol.EvaluateArguments
+    ) {
+        this.sendEvent(new OutputEvent(`[request] evaluateRequest ${args.expression}`));
 
-        // TODO : eval
-        const result = "";
+        this.sendCommand(`eval ${args.expression}`);
 
-        response.body = {result, variablesReference: 0};
-        this.sendEvent(new OutputEvent("[request] evaluateRequest"));
+        const [result, variableReference] = await this.evaluate(args.expression);
+
+        response.body = {result, variablesReference: variableReference};
         this.sendResponse(response);
+    }
+
+    private async evaluate(expression: string): Promise<[string, number]> {
+        const msg = await this.waitForMessage();
+        let result = "[unknown]";
+        let variableReference = 0;
+        if (msg.type === "result") {
+            result = `${msg.result.value !== undefined ? msg.result.value : `[${msg.result.type}]`}`;
+            if (msg.result.type === "table") {
+                variableReference = this.variableHandles.create(expression);
+            }
+        }
+        return [result, variableReference];
     }
 
     private waitForConfiguration() {
@@ -380,11 +372,19 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         const [messages, processed, unprocessed] = Message.parse(this.outputText);
         for (const msg of messages) {
-            const handler = this.handlers[msg.type] as MessageHandler | undefined;
-            if (handler !== undefined) {
-                handler(msg);
-            }
             this.sendEvent(new OutputEvent(`[message] ${JSON.stringify(msg)}`));
+            if (msg.type === "debugBreak") {
+                if (msg.breakType === "error") {
+                    this.sendEvent(new StoppedEvent("exception", mainThreadId, msg.message));
+                } else {
+                    this.sendEvent(new StoppedEvent("breakpoint", mainThreadId));
+                }
+            } else {
+                const handler = this.messageHandlerQueue.shift();
+                if (handler !== undefined) {
+                    handler(msg);
+                }
+            }
         }
 
         this.sendEvent(new OutputEvent(`[stdout] ${processed}`));
@@ -407,18 +407,10 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.assert(this.assert(this.process).stdin).write(`${cmd}\n`);
     }
 
-    private waitForMessages<A extends MessageTypeName[]>(...msgTypes: A): Promise<MessageTypeOf<A[number]>> {
+    private waitForMessage(): Promise<LuaDebug.Message> {
         return new Promise(
             resolve => {
-                const cleanupAndResolve = (msg: LuaDebug.Message) => {
-                    for (const msgType of msgTypes) {
-                        this.handlers[msgType] = undefined;
-                    }
-                    resolve(msg as MessageTypeOf<A[number]>);
-                };
-                for (const msgType of msgTypes) {
-                    this.handlers[msgType] = cleanupAndResolve;
-                }
+                this.messageHandlerQueue.push(resolve);
             }
         );
     }

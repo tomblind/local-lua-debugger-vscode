@@ -50,6 +50,14 @@
 								"description": "Working directory to launch lua/executable in.",
 								"default": "${workspaceFolder}"
 							},
+							"env": {
+								"type": "object",
+								"description": "Environment variables to set.",
+								"default": {},
+								"additionalProperties": {
+									"type": "string"
+								}
+							},
 							"lua": {
 								"type": "string",
 								"description": "The Lua executable to use.",

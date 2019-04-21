@@ -336,6 +336,19 @@ namespace Format {
 }
 
 namespace Send {
+    function getPrintableValue(value: unknown) {
+        const valueType = type(value);
+        if (valueType === "string") {
+            return `"${value}"`;
+
+        } else if (valueType === "number" || valueType === "boolean" || valueType === "nil") {
+            return tostring(value);
+
+        } else {
+            return undefined;
+        }
+    }
+
     export function error(err: string) {
         const dbgError: LuaDebug.Error = {tag: "$luaDebug", type: "error", error: err};
         print(Format.formatAsJson(dbgError));
@@ -347,7 +360,8 @@ namespace Send {
     }
 
     export function result(value: unknown) {
-        const dbgResult: LuaDebug.Result = {tag: "$luaDebug", type: "result", result: value};
+        const dbgVal: LuaDebug.Value = {type: type(value), value: getPrintableValue(value)};
+        const dbgResult: LuaDebug.Result = {tag: "$luaDebug", type: "result", result: dbgVal};
         print(Format.formatAsJson(dbgResult));
     }
 
@@ -356,50 +370,14 @@ namespace Send {
         print(Format.formatAsJson(dbgStack));
     }
 
-    function buildVariables(
-        name: string,
-        value: unknown,
-        dbgVariables: LuaDebug.Variables,
-        tableLookup: { [tbl: string]: number }
-    ): LuaDebug.Variable {
-        const valueType = type(value);
-        if (valueType === "string") {
-            return {name, type: valueType, value: `"${value}"`};
-
-        } else if (valueType === "number" || valueType === "boolean" || valueType === "nil") {
-            return {name, type: valueType, value: tostring(value)};
-
-        } else if (valueType === "table") {
-            let index = tableLookup[value as string];
-            if (index !== undefined) {
-                return {name, index};
-            }
-
-            const tbl: LuaDebug.Table = {properties: []};
-            table.insert(dbgVariables.tables, tbl);
-            index = dbgVariables.tables.length;
-            tableLookup[value as string] = index;
-
-            for (const [key, val] of pairs(value as object)) {
-                const prop = buildVariables(tostring(key), val, dbgVariables, tableLookup);
-                table.insert(tbl.properties, prop);
-            }
-            return {name, index};
-
-        } else {
-            return {name, type: valueType};
-        }
-    }
-
     export function locals(locs: Locals) {
         const dbgVariables: LuaDebug.Variables = {
             tag: "$luaDebug",
             type: "variables",
-            tables: Format.makeExplicitArray(),
             variables: Format.makeExplicitArray()
         };
         for (const [name, info] of pairs(locs)) {
-            const dbgVar = buildVariables(name, info.val, dbgVariables, {});
+            const dbgVar: LuaDebug.Variable = {type: info.type, name, value: getPrintableValue(info.val)};
             table.insert(dbgVariables.variables, dbgVar);
         }
         print(Format.formatAsJson(dbgVariables));
@@ -409,11 +387,28 @@ namespace Send {
         const dbgVariables: LuaDebug.Variables = {
             tag: "$luaDebug",
             type: "variables",
-            tables: Format.makeExplicitArray(),
             variables: Format.makeExplicitArray()
         };
         for (const [name, info] of pairs(varsObj)) {
-            const dbgVar = buildVariables(name, info.val, dbgVariables, {});
+            const dbgVar: LuaDebug.Variable = {type: info.type, name, value: getPrintableValue(info.val)};
+            table.insert(dbgVariables.variables, dbgVar);
+        }
+        print(Format.formatAsJson(dbgVariables));
+    }
+
+    export function props(tbl: object) {
+        const dbgVariables: LuaDebug.Variables = {
+            tag: "$luaDebug",
+            type: "variables",
+            variables: Format.makeExplicitArray()
+        };
+        for (const [key, val] of pairs(tbl)) {
+            const dbgVar: LuaDebug.Variable = {type: type(val), name: tostring(key), value: getPrintableValue(val)};
+            table.insert(dbgVariables.variables, dbgVar);
+        }
+        const mt = getmetatable(tbl);
+        if (mt !== undefined) {
+            const dbgVar: LuaDebug.Variable = {type: type(mt), name: "[metatable]", value: getPrintableValue(mt)};
             table.insert(dbgVariables.variables, dbgVar);
         }
         print(Format.formatAsJson(dbgVariables));
@@ -565,6 +560,7 @@ namespace Debugger {
                         "locals                       : show all local variables available in current context",
                         "ups                          : show all upvalue variables available in the current context",
                         "globals                      : show all global variables in current environment",
+                        "props                        : show all properties of a table",
                         "eval                         : evaluate an expression in the current context",
                         "exec                         : execute a statement in the current context",
                         "break [list]                 : show all breakpoints",
@@ -681,10 +677,20 @@ namespace Debugger {
                 }
 
             } else if (inp.sub(1, 4) === "eval") {
-                const [expression] = inp.match("^eval%s+(.+)$");
+                let [expression] = inp.match("^eval%s+(.+)$");
                 if (expression === undefined) {
                     Send.error("Bad expression");
+
                 } else {
+                    while (true) {
+                        const [mtStart, mtEnd, mtExp] = expression.find("^(.-)%.%[metatable%]");
+                        if (mtStart === undefined || mtEnd === undefined) {
+                            break;
+                        }
+                        expression =
+                            `${expression.sub(1, mtStart - 1)}getmetatable(${mtExp})${expression.sub(mtEnd + 1)}`;
+                    }
+
                     const env: Env = setmetatable({}, {__index: _G});
 
                     const ups = getUpvalues(info);
@@ -702,6 +708,50 @@ namespace Debugger {
                         const [s, r] = pcall(f);
                         if (s) {
                             Send.result(r);
+                        } else {
+                            Send.error(r as string);
+                        }
+                    } else {
+                        Send.error(e as string);
+                    }
+                }
+
+            } else if (inp.sub(1, 5) === "props") {
+                let [expression] = inp.match("^props%s+(.+)$");
+                if (expression === undefined) {
+                    Send.error("Bad expression");
+
+                } else {
+                    while (true) {
+                        const [mtStart, mtEnd, mtExp] = expression.find("^(.-)%.%[metatable%]");
+                        if (mtStart === undefined || mtEnd === undefined) {
+                            break;
+                        }
+                        expression =
+                            `${expression.sub(1, mtStart - 1)}getmetatable(${mtExp})${expression.sub(mtEnd + 1)}`;
+                    }
+
+                    const env: Env = setmetatable({}, {__index: _G});
+
+                    const ups = getUpvalues(info);
+                    for (const [name, val] of pairs(ups)) {
+                        env[name] = val.val;
+                    }
+
+                    const vars = getLocals(frameOffset + frame);
+                    for (const [name, val] of pairs(vars)) {
+                        env[name] = val.val;
+                    }
+
+                    const [f, e] = loadCode(`return ${expression}`, env);
+                    if (f !== undefined) {
+                        const [s, r] = pcall(f);
+                        if (s) {
+                            if (isType(r, "table")) {
+                                Send.props(r);
+                            } else {
+                                Send.error(`expected table, got ${type(r)}`);
+                            }
                         } else {
                             Send.error(r as string);
                         }

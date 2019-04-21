@@ -16,11 +16,6 @@ declare namespace LuaDebug {
         breakType: "breakpoint" | "error";
     }
 
-    interface Result extends MessageBase {
-        type: "result";
-        result: unknown;
-    }
-
     interface Frame {
         source: string;
         line: number;
@@ -35,27 +30,23 @@ declare namespace LuaDebug {
         frames: Frame[];
     }
 
-    interface TableRef {
-        name: string;
-        index: number;
-    }
-
     interface Value {
-        name: string;
         type: string;
         value?: string;
     }
 
-    type Variable = Value | TableRef;
-
-    interface Table {
-        properties: Variable[];
+    interface Variable extends Value {
+        name: string;
     }
 
     interface Variables extends MessageBase {
         type: "variables";
-        tables: Table[];
         variables: Variable[];
+    }
+
+    interface Result extends MessageBase {
+        type: "result";
+        result: Value;
     }
 
     interface Breakpoint {
