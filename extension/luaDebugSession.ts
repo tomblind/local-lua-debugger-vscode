@@ -247,8 +247,9 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         default:
             baseName = this.assert(this.variableHandles.get(args.variablesReference));
-            cmd = `props ${baseName}`;
-            this.sendEvent(new OutputEvent(`[request] variablesRequest ${baseName}`));
+            const expression = this.fixExpression(baseName);
+            cmd = `props ${expression}`;
+            this.sendEvent(new OutputEvent(`[request] variablesRequest ${expression}`));
             break;
         }
 
@@ -261,9 +262,9 @@ export class LuaDebugSession extends LoggingDebugSession {
                 let value: string;
                 let ref: number | undefined;
                 if (variable.type === "table") {
-                    const name = baseName !== undefined ? `${baseName}.${variable.name}` : variable.name;
+                    const name = baseName !== undefined ? `${baseName}[${variable.name}]` : variable.name;
                     ref = this.variableHandles.create(name);
-                    value = "[table]";
+                    value = variable.value !== undefined ? variable.value : "[table]";
                 } else if (variable.value === undefined) {
                     value = `[${variable.type}]`;
                 } else {
@@ -309,11 +310,18 @@ export class LuaDebugSession extends LoggingDebugSession {
         response: DebugProtocol.SetVariableResponse,
         args: DebugProtocol.SetVariableArguments
     ) {
-        this.sendEvent(new OutputEvent(`[request] setVariableRequest ${args.name} = ${args.value}`));
+        let name: string;
+        if (args.variablesReference > ScopeType.Global) {
+            name = `${this.variableHandles.get(args.variablesReference)}[${args.name}]`;
+        } else {
+            name = args.name;
+        }
+        name = this.fixExpression(name);
+        this.sendEvent(new OutputEvent(`[request] setVariableRequest ${name} = ${args.value}`));
 
-        this.sendCommand(`exec ${args.name} = ${args.value}; return ${args.name}`);
+        this.sendCommand(`exec ${name} = ${args.value}; return ${name}`);
 
-        const [value, variableReference] = await this.evaluate(args.value);
+        const [value, variableReference] = await this.getEvaluateResult(args.value);
 
         response.body = {value, variablesReference: variableReference};
         this.sendResponse(response);
@@ -323,25 +331,40 @@ export class LuaDebugSession extends LoggingDebugSession {
         response: DebugProtocol.EvaluateResponse,
         args: DebugProtocol.EvaluateArguments
     ) {
-        this.sendEvent(new OutputEvent(`[request] evaluateRequest ${args.expression}`));
+        const expression = this.fixExpression(args.expression);
+        this.sendEvent(new OutputEvent(`[request] evaluateRequest ${expression}`));
 
-        this.sendCommand(`eval ${args.expression}`);
+        this.sendCommand(`eval ${expression}`);
 
-        const [result, variableReference] = await this.evaluate(args.expression);
+        const [result, variableReference] = await this.getEvaluateResult(expression);
 
         response.body = {result, variablesReference: variableReference};
         this.sendResponse(response);
     }
 
-    private async evaluate(expression: string): Promise<[string, number]> {
+    private fixExpression(expression: string) {
+        while (true) {
+            const m = expression.match(/^(.+)\[\[metatable\]\]/);
+            if (m !== undefined && m !== null) {
+                expression = expression.replace(/^(.+)\[\[metatable\]\]/, "getmetatable($1)");
+            } else {
+                break;
+            }
+        }
+        return expression;
+    }
+
+    private async getEvaluateResult(expression: string): Promise<[string, number]> {
         const msg = await this.waitForMessage();
-        let result = "[unknown]";
+        let result = "[error]";
         let variableReference = 0;
         if (msg.type === "result") {
             result = `${msg.result.value !== undefined ? msg.result.value : `[${msg.result.type}]`}`;
             if (msg.result.type === "table") {
                 variableReference = this.variableHandles.create(expression);
             }
+        } else if (msg.type === "error") {
+            result = `[error: ${msg.error}]`;
         }
         return [result, variableReference];
     }

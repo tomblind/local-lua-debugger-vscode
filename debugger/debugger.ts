@@ -345,7 +345,7 @@ namespace Send {
             return tostring(value);
 
         } else {
-            return undefined;
+            return `[${value}]`;
         }
     }
 
@@ -403,12 +403,13 @@ namespace Send {
             variables: Format.makeExplicitArray()
         };
         for (const [key, val] of pairs(tbl)) {
-            const dbgVar: LuaDebug.Variable = {type: type(val), name: tostring(key), value: getPrintableValue(val)};
+            const name = getPrintableValue(key);
+            const dbgVar: LuaDebug.Variable = {type: type(val), name, value: getPrintableValue(val)};
             table.insert(dbgVariables.variables, dbgVar);
         }
-        const mt = getmetatable(tbl);
-        if (mt !== undefined) {
-            const dbgVar: LuaDebug.Variable = {type: type(mt), name: "[metatable]", value: getPrintableValue(mt)};
+        const meta = getmetatable(tbl);
+        if (meta !== undefined) {
+            const dbgVar: LuaDebug.Variable = {type: type(meta), name: "[metatable]", value: getPrintableValue(meta)};
             table.insert(dbgVariables.variables, dbgVar);
         }
         print(Format.formatAsJson(dbgVariables));
@@ -525,6 +526,56 @@ namespace Debugger {
             globs[name] = {val, type: type(val)};
         }
         return globs;
+    }
+
+    /** @tupleReturn */
+    function execute(
+        statement: string,
+        frameOffset: number,
+        frame: number,
+        info: debug.FunctionInfo,
+        stackLength: number
+    ): [true, unknown] | [false, string] {
+        const locs = getLocals(frameOffset + frame);
+        const ups = getUpvalues(info);
+        const env = setmetatable(
+            {},
+            {
+                __index(this: unknown, name: string) {
+                    const v = locs[name] || ups[name];
+                    return (v !== undefined) && v.val || _G[name];
+                },
+                __newindex(this: unknown, name: string, val: unknown) {
+                    let v = locs[name];
+                    if (v !== undefined) {
+                        let extraStack = 1;
+                        while (debug.getinfo(frameOffset + stackLength + extraStack)) {
+                            ++extraStack;
+                        }
+                        debug.setlocal(frameOffset + frame + extraStack, v.index, val);
+                        v.type = type(val);
+                        v.val = val;
+                        return;
+                    }
+
+                    v = ups[name];
+                    if (v !== undefined) {
+                        debug.setupvalue(assert(info.func), v.index, val);
+                        v.type = type(val);
+                        v.val = val;
+                        return;
+                    }
+
+                    _G[name] = val;
+                }
+            }
+        );
+        const [f, e] = loadCode(statement, env);
+        if (f !== undefined) {
+            return pcall(f);
+        } else {
+            return [false, e as string];
+        }
     }
 
     let breakAtDepth = 0;
@@ -677,86 +728,34 @@ namespace Debugger {
                 }
 
             } else if (inp.sub(1, 4) === "eval") {
-                let [expression] = inp.match("^eval%s+(.+)$");
+                const [expression] = inp.match("^eval%s+(.+)$");
                 if (expression === undefined) {
                     Send.error("Bad expression");
 
                 } else {
-                    while (true) {
-                        const [mtStart, mtEnd, mtExp] = expression.find("^(.-)%.%[metatable%]");
-                        if (mtStart === undefined || mtEnd === undefined) {
-                            break;
-                        }
-                        expression =
-                            `${expression.sub(1, mtStart - 1)}getmetatable(${mtExp})${expression.sub(mtEnd + 1)}`;
-                    }
-
-                    const env: Env = setmetatable({}, {__index: _G});
-
-                    const ups = getUpvalues(info);
-                    for (const [name, val] of pairs(ups)) {
-                        env[name] = val.val;
-                    }
-
-                    const vars = getLocals(frameOffset + frame);
-                    for (const [name, val] of pairs(vars)) {
-                        env[name] = val.val;
-                    }
-
-                    const [f, e] = loadCode(`return ${expression}`, env);
-                    if (f !== undefined) {
-                        const [s, r] = pcall(f);
-                        if (s) {
-                            Send.result(r);
-                        } else {
-                            Send.error(r as string);
-                        }
+                    const [s, r] = execute("return " + expression, frameOffset + 1, frame, info, stack.length);
+                    if (s) {
+                        Send.result(r);
                     } else {
-                        Send.error(e as string);
+                        Send.error(r as string);
                     }
                 }
 
             } else if (inp.sub(1, 5) === "props") {
-                let [expression] = inp.match("^props%s+(.+)$");
+                const [expression] = inp.match("^props%s+(.+)$");
                 if (expression === undefined) {
                     Send.error("Bad expression");
 
                 } else {
-                    while (true) {
-                        const [mtStart, mtEnd, mtExp] = expression.find("^(.-)%.%[metatable%]");
-                        if (mtStart === undefined || mtEnd === undefined) {
-                            break;
-                        }
-                        expression =
-                            `${expression.sub(1, mtStart - 1)}getmetatable(${mtExp})${expression.sub(mtEnd + 1)}`;
-                    }
-
-                    const env: Env = setmetatable({}, {__index: _G});
-
-                    const ups = getUpvalues(info);
-                    for (const [name, val] of pairs(ups)) {
-                        env[name] = val.val;
-                    }
-
-                    const vars = getLocals(frameOffset + frame);
-                    for (const [name, val] of pairs(vars)) {
-                        env[name] = val.val;
-                    }
-
-                    const [f, e] = loadCode(`return ${expression}`, env);
-                    if (f !== undefined) {
-                        const [s, r] = pcall(f);
-                        if (s) {
-                            if (isType(r, "table")) {
-                                Send.props(r);
-                            } else {
-                                Send.error(`expected table, got ${type(r)}`);
-                            }
+                    const [s, r] = execute("return " + expression, frameOffset + 1, frame, info, stack.length);
+                    if (s) {
+                        if (isType(r, "table")) {
+                            Send.props(r);
                         } else {
-                            Send.error(r as string);
+                            Send.error(`Expression "${expression}" is not a table`);
                         }
                     } else {
-                        Send.error(e as string);
+                        Send.error(r as string);
                     }
                 }
 
@@ -766,44 +765,11 @@ namespace Debugger {
                     Send.error("Bad statement");
 
                 } else {
-                    const locs = getLocals(frameOffset + frame);
-                    const ups = getUpvalues(info);
-                    const env = setmetatable(
-                        {},
-                        {
-                            __index(this: unknown, name: string) {
-                                const v = locs[name] || ups[name];
-                                return (v !== undefined) && v.val || _G[name];
-                            },
-                            __newindex(this: unknown, name: string, val: unknown) {
-                                let v = locs[name];
-                                if (v !== undefined) {
-                                    let extraStack = 1;
-                                    while (debug.getinfo(frameOffset + stack.length + extraStack)) {
-                                        ++extraStack;
-                                    }
-                                    debug.setlocal(frameOffset + frame + extraStack, v.index, val);
-                                    return;
-                                }
-
-                                v = ups[name];
-                                if (v !== undefined) {
-                                    debug.setupvalue(assert(info.func), v.index, val);
-                                    return;
-                                }
-
-                                _G[name] = val;
-                            }
-                        }
-                    );
-                    const [f, e] = loadCode(statement, env);
-                    if (f !== undefined) {
-                        const [_, r] = pcall(f);
-                        if (r !== undefined) {
-                            Send.result(r);
-                        }
+                    const [s, r] = execute(statement, frameOffset + 1, frame, info, stack.length);
+                    if (s) {
+                        Send.result(r);
                     } else {
-                        Send.error(e as string);
+                        Send.error(r as string);
                     }
                 }
 
