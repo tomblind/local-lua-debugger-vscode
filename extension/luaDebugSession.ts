@@ -149,15 +149,36 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    protected setBreakPointsRequest(
+    protected async setBreakPointsRequest(
         response: DebugProtocol.SetBreakpointsResponse,
         args: DebugProtocol.SetBreakpointsArguments
-    ): void {
+    ) {
         const filePath = args.source.path as string;
-        const lines = args.lines !== undefined ? args.lines : [];
-        this.fileBreakpointLines[filePath] = lines;
+        const fileName = path.basename(filePath);
 
-        const breakpoints: Breakpoint[] = lines.map(line => new Breakpoint(true, line));
+        let newLines = args.breakpoints !== undefined ? args.breakpoints.map(bp => bp.line) : [];
+
+        if (this.process !== undefined) {
+            let oldLines = this.fileBreakpointLines[filePath];
+            if (oldLines !== undefined) {
+                const filteredNewLines = newLines.filter(l => oldLines.indexOf(l) === -1);
+                oldLines = oldLines.filter(l => newLines.indexOf(l) === -1);
+                newLines = filteredNewLines;
+                for (const line of oldLines) {
+                    this.sendCommand(`break clear ${fileName}:${line}`);
+                    await this.waitForMessage();
+                }
+            }
+
+            for (const line of newLines) {
+                this.sendCommand(`break set ${fileName}:${line}`);
+                await this.waitForMessage();
+            }
+        }
+
+        this.fileBreakpointLines[filePath] = newLines;
+
+        const breakpoints: Breakpoint[] = this.fileBreakpointLines[filePath].map(line => new Breakpoint(true, line));
         response.body = {breakpoints};
         this.sendEvent(new OutputEvent(`[request] setBreakPointsRequest`));
         this.sendResponse(response);

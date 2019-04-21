@@ -37,6 +37,9 @@ function formatPath(pathStr: string) {
     if (firstChar === "@" || firstChar === "=") {
         pathStr = pathStr.sub(2);
     }
+    if (pathStr.sub(2, 2) === ":") {
+        pathStr = pathStr.sub(1, 1).lower() + pathStr.sub(2);
+    }
     [pathStr] = pathStr.gsub("\\", "/");
     return pathStr;
 }
@@ -543,7 +546,11 @@ namespace Debugger {
             {
                 __index(this: unknown, name: string) {
                     const v = locs[name] || ups[name];
-                    return (v !== undefined) && v.val || _G[name];
+                    if (v !== undefined) {
+                        return v.val;
+                    } else {
+                        return _G[name];
+                    }
                 },
                 __newindex(this: unknown, name: string, val: unknown) {
                     let v = locs[name];
@@ -681,7 +688,7 @@ namespace Debugger {
                     || cmd === "enable"
                 ) {
                     let lineStr: string | undefined;
-                    [file, lineStr] = inp.match("^break%s+[a-z]+%s+([^:]+):(%d+)$");
+                    [file, lineStr] = inp.match("^break%s+[a-z]+%s+(.-):(%d+)$");
                     if (file !== undefined && lineStr !== undefined) {
                         file = formatPath(file);
                         line = assert(tonumber(lineStr));
