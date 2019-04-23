@@ -44,6 +44,12 @@ declare namespace LuaDebug {
         variables: Variable[];
     }
 
+    interface Properties extends MessageBase {
+        type: "properties";
+        properties: Variable[];
+        metatable?: Value;
+    }
+
     interface Result extends MessageBase {
         type: "result";
         result: Value;
@@ -61,5 +67,5 @@ declare namespace LuaDebug {
         breakpoints: Breakpoint[];
     }
 
-    type Message = Error | DebugBreak | Result | Stack | Variables | Breakpoints;
+    type Message = Error | DebugBreak | Result | Stack | Variables | Properties | Breakpoints;
 }

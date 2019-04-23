@@ -400,22 +400,21 @@ namespace Send {
     }
 
     export function props(tbl: object) {
-        const dbgVariables: LuaDebug.Variables = {
+        const dbgProperties: LuaDebug.Properties = {
             tag: "$luaDebug",
-            type: "variables",
-            variables: Format.makeExplicitArray()
+            type: "properties",
+            properties: Format.makeExplicitArray()
         };
         for (const [key, val] of pairs(tbl)) {
             const name = getPrintableValue(key);
             const dbgVar: LuaDebug.Variable = {type: type(val), name, value: getPrintableValue(val)};
-            table.insert(dbgVariables.variables, dbgVar);
+            table.insert(dbgProperties.properties, dbgVar);
         }
         const meta = getmetatable(tbl);
         if (meta !== undefined) {
-            const dbgVar: LuaDebug.Variable = {type: type(meta), name: "[metatable]", value: getPrintableValue(meta)};
-            table.insert(dbgVariables.variables, dbgVar);
+            dbgProperties.metatable = {type: type(meta), value: getPrintableValue(meta)};
         }
-        print(Format.formatAsJson(dbgVariables));
+        print(Format.formatAsJson(dbgProperties));
     }
 
     export function breakpoints(breaks: LuaDebug.Breakpoint[]) {
