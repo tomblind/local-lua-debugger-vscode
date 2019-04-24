@@ -22,6 +22,7 @@ import * as fs from "fs";
 type LaunchRequestArguments = DebugProtocol.LaunchRequestArguments & (LuaProgramConfig | CustomProgramConfig) & {
     cwd?: string;
     env?: NodeJS.ProcessEnv;
+    sourceRoot?: string;
     extensionPath?: string;
 };
 
@@ -59,6 +60,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private readonly fileBreakpointLines: { [file: string]: number[] } = {};
     private process?: child_process.ChildProcess;
     private cwd?: string;
+    private sourceRoot?: string;
     private outputText = "";
     private onConfigurationDone?: () => void;
     private readonly messageHandlerQueue: MessageHandler[] = [];
@@ -104,47 +106,52 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendEvent(new OutputEvent(`[request] launchRequest ${process.cwd()}`));
         await this.waitForConfiguration();
 
+        this.sourceRoot = args.sourceRoot;
+
+        this.cwd = this.assert(args.cwd);
+        const options/* : child_process.SpawnOptions */ = {
+            env: Object.assign({}, process.env),
+            cwd: this.cwd,
+            shell: true
+        };
+
+        if (args.env!== undefined) {
+            for (const key in args.env) {
+                const envKey = getEnvKey(options.env, key);
+                options.env[envKey] = args.env[key];
+            }
+        }
+
+        const luaPathKey = getEnvKey(options.env, "LUA_PATH");
+        let luaPath = options.env[luaPathKey];
+        if (luaPath === undefined) {
+            luaPath = "";
+        } else if (luaPath.length > 0 && !luaPath.endsWith(";")) {
+            luaPath += ";";
+        }
+        options.env[luaPathKey] = luaPath + `${this.assert(args.extensionPath)}/?.lua`;
+
         if (isLuaProgramConfig(args)) {
-            this.cwd = this.assert(args.cwd);
-            const options/* : child_process.SpawnOptions */ = {
-                env: Object.assign({}, process.env),
-                cwd: this.cwd,
-                shell: true
-            };
-
-            if (args.env!== undefined) {
-                for (const key in args.env) {
-                    const envKey = getEnvKey(options.env, key);
-                    options.env[envKey] = args.env[key];
-                }
-            }
-
-            const luaPathKey = getEnvKey(options.env, "LUA_PATH");
-            let luaPath = options.env[luaPathKey];
-            if (luaPath === undefined) {
-                luaPath = "";
-            } else if (luaPath.length > 0 && !luaPath.endsWith(";")) {
-                luaPath += ";";
-            }
-            options.env[luaPathKey] = luaPath + `${this.assert(args.extensionPath)}/?.lua`;
-
             this.process = child_process.spawn(
                 args.lua,
                 ["-e", `"require('debugger').start([[${args.file}]])"`],
-                // [`"${args.file}"`],
                 options
             );
-            this.assert(this.process.stdout).on("data", data => this.onDebuggerOutput(data, false));
-            this.assert(this.process.stderr).on("data", data => this.onDebuggerOutput(data, true));
-            this.process.on("close", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
-            this.process.on("disconnect", () => this.onDebuggerTerminated(`disconnected`));
-            this.process.on("error", err => this.onDebuggerTerminated(`error: ${err}`));
-            this.process.on("exit", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
 
         } else {
-            this.sendEvent(new OutputEvent(`[request] launchRequest exe ${args.executable} ${args.args}`));
-
+            this.process = child_process.spawn(
+                args.executable,
+                [/* TODO */],
+                options
+            );
         }
+
+        this.assert(this.process.stdout).on("data", data => this.onDebuggerOutput(data, false));
+        this.assert(this.process.stderr).on("data", data => this.onDebuggerOutput(data, true));
+        this.process.on("close", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
+        this.process.on("disconnect", () => this.onDebuggerTerminated(`disconnected`));
+        this.process.on("error", err => this.onDebuggerTerminated(`error: ${err}`));
+        this.process.on("exit", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
 
         this.sendEvent(new OutputEvent("[request] launchRequest response"));
         this.sendResponse(response);
@@ -210,19 +217,29 @@ export class LuaDebugSession extends LoggingDebugSession {
             const endFrame = Math.min(startFrame + maxLevels, msg.frames.length);
             for (let i = startFrame; i < endFrame; ++i) {
                 const frame = msg.frames[i];
-                let source: Source;
-                let line: number;
-                // if (frame.mappedSource !== undefined) {
-                //     source = new Source(path.basename(frame.mappedSource), frame.mappedSource, undefined, frame.source);
-                //     line = frame.mappedLine !== undefined ? frame.mappedLine : -1;
-                // } else {
-                    const fullPath = path.isAbsolute(frame.source)
-                        ? frame.source
-                        : path.resolve(this.assert(this.cwd), frame.source);
-                    source = new Source(path.basename(frame.source), fs.existsSync(fullPath) ? fullPath : frame.source);
-                    line = frame.line;
-                // }
 
+                let sourcePath = this.resolvePath(frame.source);
+                if (sourcePath === undefined) {
+                    sourcePath = frame.source;
+                }
+
+                let source: Source | undefined;
+                let line: number | undefined;
+                if (frame.mappedSource !== undefined) {
+                    const mappedPath = this.resolvePath(
+                        this.sourceRoot !== undefined
+                            ? path.resolve(this.sourceRoot, frame.mappedSource)
+                            : frame.mappedSource
+                    );
+                    if (mappedPath !== undefined) {
+                        source = new Source(path.basename(mappedPath), mappedPath, undefined, sourcePath);
+                        line = frame.mappedLine !== undefined ? frame.mappedLine : -1;
+                    }
+                }
+                if (source === undefined || line === undefined) {
+                    source = new Source(path.basename(sourcePath), sourcePath);
+                    line = frame.line;
+                }
                 frames.push(new StackFrame(i, frame.func !== undefined ? frame.func : "???", source, line));
             }
             response.body = {stackFrames: frames, totalFrames: msg.frames.length};
@@ -407,6 +424,17 @@ export class LuaDebugSession extends LoggingDebugSession {
             throw new Error(message);
         }
         return value;
+    }
+
+    private resolvePath(filePath: string) {
+        if (path.isAbsolute(filePath)) {
+            return fs.existsSync(filePath) ? filePath : undefined;
+        }
+        const fullPath = path.resolve(this.assert(this.cwd), filePath);
+        if (fs.existsSync(fullPath)) {
+            return fullPath;
+        }
+        return undefined;
     }
 
     private async onDebuggerStop(msg: LuaDebug.DebugBreak) {

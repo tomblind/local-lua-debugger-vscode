@@ -53,10 +53,13 @@
 							"env": {
 								"type": "object",
 								"description": "Environment variables to set.",
-								"default": {},
 								"additionalProperties": {
 									"type": "string"
 								}
+							},
+							"sourceRoot": {
+								"type": "string",
+								"description": "Root path of source mapped files."
 							},
 							"lua": {
 								"type": "string",
@@ -65,7 +68,7 @@
 							},
 							"file": {
 								"type": "string",
-								"description": "The .lua file to pass to lua to start the program.",
+								"description": "The lua file to pass to lua to start the program.",
 								"default": "${file}"
 							},
 							"executable": {
