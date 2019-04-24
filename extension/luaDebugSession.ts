@@ -225,22 +225,24 @@ export class LuaDebugSession extends LoggingDebugSession {
 
                 let source: Source | undefined;
                 let line: number | undefined;
-                if (frame.mappedSource !== undefined) {
+                let column: number | undefined;
+                if (frame.mappedLocation !== undefined) {
                     const mappedPath = this.resolvePath(
                         this.sourceRoot !== undefined
-                            ? path.resolve(this.sourceRoot, frame.mappedSource)
-                            : frame.mappedSource
+                            ? path.resolve(this.sourceRoot, frame.mappedLocation.source)
+                            : frame.mappedLocation.source
                     );
                     if (mappedPath !== undefined) {
-                        source = new Source(path.basename(mappedPath), mappedPath, undefined, sourcePath);
-                        line = frame.mappedLine !== undefined ? frame.mappedLine : -1;
+                        source = new Source(path.basename(mappedPath), mappedPath);
+                        line = frame.mappedLocation.line;
+                        column = frame.mappedLocation.column;
                     }
                 }
                 if (source === undefined || line === undefined) {
                     source = new Source(path.basename(sourcePath), sourcePath);
                     line = frame.line;
                 }
-                frames.push(new StackFrame(i, frame.func !== undefined ? frame.func : "???", source, line));
+                frames.push(new StackFrame(i, frame.func !== undefined ? frame.func : "???", source, line, column));
             }
             response.body = {stackFrames: frames, totalFrames: msg.frames.length};
 

@@ -13,7 +13,13 @@ declare namespace LuaDebug {
     interface DebugBreak extends MessageBase {
         type: "debugBreak";
         message: string;
-        breakType: "breakpoint" | "error";
+        breakType: "step" | "breakpoint" | "error";
+    }
+
+    interface MappedLocation {
+        source: string;
+        line: number;
+        column: number;
     }
 
     interface Frame {
@@ -21,8 +27,7 @@ declare namespace LuaDebug {
         line: number;
         func?: string;
         active?: boolean;
-        mappedSource?: string;
-        mappedLine?: number;
+        mappedLocation?: MappedLocation;
     }
 
     interface Stack extends MessageBase {

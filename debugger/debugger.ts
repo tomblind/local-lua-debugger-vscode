@@ -97,6 +97,7 @@ namespace Breakpoint {
 interface SourceLineMapping {
     sourceIndex: number;
     sourceLine: number;
+    sourceColumn: number;
 }
 
 interface SourceMap {
@@ -177,43 +178,48 @@ namespace SourceMap
     function build(data: string) {
         const [sources] = data.match('"sources"%s*:%s*(%b[])');
         const [mappings] = data.match('"mappings"%s*:%s*"([^"]+)"');
+        const [sourceRoot] = data.match('"sourceRoot"%s*:%s*"([^"]+)"');
         if (mappings === undefined || sources === undefined) {
             return undefined;
-        }
-
-        const lineMappingsForSources: { [sourceIndex: number]: { [originalLine: number]: number } } = {}; {
-            let line = 1;
-            let sourceIndex = 0;
-            let originalLine = 1;
-            for (const [mapping, separator] of mappings.gmatch("([^;,]*)([;,]?)")) {
-                const [colOffset, sourceOffset, origLineOffset, origColOffset] = decodeBase64VLQ(mapping);
-                sourceIndex += (sourceOffset || 0);
-                originalLine += (origLineOffset || 0);
-
-                let lineMappings = lineMappingsForSources[sourceIndex];
-                if (lineMappings === undefined) {
-                    lineMappings = {};
-                    lineMappingsForSources[sourceIndex] = lineMappings;
-                }
-                lineMappings[originalLine] = math.min(lineMappings[originalLine] || math.huge, line);
-
-                if (separator === ";") {
-                    ++line;
-                }
-            }
         }
 
         const sourceMap: SourceMap = {sources: []};
 
         for (const [source] of sources.gmatch('"([^"]+)"')) {
-            table.insert(sourceMap.sources, source);
+            table.insert(sourceMap.sources, formatPath(sourceRoot && `${sourceRoot}/${source}` || source));
         }
 
-        for (const [sourceIndex, lineMappings] of pairs(lineMappingsForSources)) {
-            for (const [sourceLine, line] of pairs(lineMappings)) {
-                sourceMap[line] = {sourceIndex, sourceLine};
+        let line = 1;
+        let sourceIndex = 0;
+        let sourceLine = 1;
+        let sourceColumn = 1;
+        for (const [mapping, separator] of mappings.gmatch("([^;,]*)([;,]?)")) {
+            const [colOffset, sourceOffset, sourceLineOffset, sourceColOffset] = decodeBase64VLQ(mapping);
+            sourceIndex += (sourceOffset || 0);
+            sourceLine += (sourceLineOffset || 0);
+            sourceColumn += (sourceColOffset || 0);
+
+            const lineMapping = sourceMap[line];
+            if (lineMapping === undefined
+                || sourceLine < lineMapping.sourceLine
+                || (sourceLine === lineMapping.sourceLine && sourceColumn < lineMapping.sourceColumn)
+            ) {
+                sourceMap[line] = {sourceIndex, sourceLine, sourceColumn};
+            }
+
+            if (separator === ";") {
+                ++line;
             }
         }
+
+        // let s = "";
+        // for (const [l, m] of pairs(sourceMap)) {
+        //     const mapping = m as unknown as SourceLineMapping;
+        //     if (isType(l, "number")) {
+        //         s += `${l} -> ${sourceMap.sources[mapping.sourceIndex]}:${mapping.sourceLine}:${mapping.sourceColumn}\n`;
+        //     }
+        // }
+        // print(s);
 
         return sourceMap;
     }
@@ -483,11 +489,12 @@ namespace Debugger {
                 const sourceMap = SourceMap.get(frame.source);
                 if (sourceMap) {
                     const lineMapping = sourceMap[frame.line];
-                    if (lineMapping !== undefined) {
-                        if (sourceMap.sources) {
-                            frame.mappedSource = assert(sourceMap.sources[lineMapping.sourceIndex]);
-                        }
-                        frame.mappedLine = sourceMap[frame.line].sourceLine;
+                    if (lineMapping !== undefined && sourceMap.sources !== undefined) {
+                        frame.mappedLocation = {
+                            source: assert(sourceMap.sources[lineMapping.sourceIndex]),
+                            line: sourceMap[frame.line].sourceLine,
+                            column: sourceMap[frame.line].sourceColumn
+                        };
                     }
                 }
             }
@@ -829,7 +836,7 @@ namespace Debugger {
         }
 
         if (stack.length <= breakAtDepth) {
-            Send.debugBreak("breakpoint hit", "breakpoint");
+            Send.debugBreak("step", "step");
             debugBreak(stack);
             return;
         }
@@ -894,7 +901,8 @@ namespace Debugger {
                 if (sourceMap && sourceMap[line]) {
                     const sourceFile = sourceMap.sources[sourceMap[line].sourceIndex];
                     const sourceLine = sourceMap[line].sourceLine;
-                    msgLine = `${indent}${sourceFile}:${sourceLine}:${msgLine.sub(e + 1)}`;
+                    const sourceColumn = sourceMap[line].sourceColumn;
+                    msgLine = `${indent}${sourceFile}:${sourceLine}:${sourceColumn}:${msgLine.sub(e + 1)}`;
                 }
             }
             result += msgLine;
