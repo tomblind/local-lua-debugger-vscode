@@ -33,21 +33,36 @@ function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val i
 }
 
 function formatPath(pathStr: string) {
-    const firstChar = pathStr.sub(1, 1);
-    if (firstChar === "@" || firstChar === "=") {
-        pathStr = pathStr.sub(2);
+    let [path] = pathStr.gsub("^[@=]", "");
+
+    let [drive] = pathStr.match("^[a-zA-Z]:");
+    if (drive !== undefined) {
+        drive = drive.upper();
+        path = path.sub(3);
+    } else if (pathStr.sub(1, 1) === "/") {
+        drive = "/";
     }
-    if (pathStr.sub(2, 2) === ":") {
-        pathStr = pathStr.sub(1, 1).lower() + pathStr.sub(2);
+
+    const pathParts: string[] = [];
+    for (const [part] of path.gmatch("[^\\/]+")) {
+        if (part !== ".") {
+            if (part === ".." && pathParts.length > 0 && pathParts[pathParts.length - 1] !== "..") {
+                table.remove(pathParts);
+            } else {
+                table.insert(pathParts, part);
+            }
+        }
     }
-    [pathStr] = pathStr.gsub("\\", "/");
-    return pathStr;
+    path = table.concat(pathParts, "/");
+
+    return drive !== undefined ? `${drive}/${path}` : path;
 }
 
 namespace Breakpoint {
     let current: LuaDebug.Breakpoint[] = [];
 
     export function get(file: string, line: number): LuaDebug.Breakpoint | undefined {
+        file = formatPath(file);
         for (const [_, breakpoint] of ipairs(current)) {
             if (breakpoint.file === file && breakpoint.line === line) {
                 return breakpoint;
@@ -60,19 +75,12 @@ namespace Breakpoint {
         return current;
     }
 
-    function makeFilePattern(file: string) {
-        file = formatPath(file);
-        [file] = file.gsub("%.", "%.");
-        file = file + "$";
-        return file;
-    }
-
     export function add(file: string, line: number) {
-        const pattern = makeFilePattern(file);
-        table.insert(current, {file, line, pattern, enabled: true});
+        table.insert(current, {file: formatPath(file), line, enabled: true});
     }
 
     export function remove(file: string, line: number) {
+        file = formatPath(file);
         for (const [i, breakpoint] of ipairs(current)) {
             if (breakpoint.file === file && breakpoint.line === line) {
                 table.remove(current, i);
@@ -86,11 +94,13 @@ namespace Breakpoint {
     }
 }
 
+interface SourceLineMapping {
+    sourceIndex: number;
+    sourceLine: number;
+}
+
 interface SourceMap {
-    [line: number]: {
-        sourceIndex: number;
-        sourceLine: number;
-    };
+    [line: number]: SourceLineMapping;
     sources: string[];
 }
 
@@ -689,7 +699,6 @@ namespace Debugger {
                     let lineStr: string | undefined;
                     [file, lineStr] = inp.match("^break%s+[a-z]+%s+(.-):(%d+)$");
                     if (file !== undefined && lineStr !== undefined) {
-                        file = formatPath(file);
                         line = assert(tonumber(lineStr));
                         breakpoint = Breakpoint.get(file, line);
                     }
@@ -697,6 +706,8 @@ namespace Debugger {
                 if (cmd === "set") {
                     if (file !== undefined && line !== undefined) {
                         Breakpoint.add(file, line);
+                        breakpoint = assert(Breakpoint.get(file, line));
+                        Send.breakpoints([breakpoint]);
                     } else {
                         Send.error("Bad breakpoint");
                     }
@@ -704,7 +715,7 @@ namespace Debugger {
                 } else if (cmd === "del" || cmd === "delete") {
                     if (file !== undefined && line !== undefined) {
                         Breakpoint.remove(file, line);
-
+                        Send.result(undefined);
                     } else {
                         Send.error("Bad breakpoint");
                     }
@@ -712,6 +723,7 @@ namespace Debugger {
                 } else if (cmd === "dis" || cmd === "disable") {
                     if (breakpoint !== undefined) {
                         breakpoint.enabled = false;
+                        Send.breakpoints([breakpoint]);
                     } else {
                         Send.error("Bad breakpoint");
                     }
@@ -719,6 +731,7 @@ namespace Debugger {
                 } else if (cmd === "en" || cmd === "enable") {
                     if (breakpoint !== undefined) {
                         breakpoint.enabled = true;
+                        Send.breakpoints([breakpoint]);
                     } else {
                         Send.error("Bad breakpoint");
                     }
@@ -829,21 +842,27 @@ namespace Debugger {
 
         const source = formatPath(assert(info.source));
         const sourceMap = SourceMap.get(source);
-        const lineMapping = sourceMap && sourceMap[info.currentline];
-        // tslint:disable-next-line: no-non-null-assertion
-        const sourceMapFile = lineMapping && sourceMap!.sources[lineMapping.sourceIndex];
+        let sourceMapFile: string | undefined;
+        let lineMapping: SourceLineMapping | undefined;
+        if (sourceMap) {
+            lineMapping = sourceMap[info.currentline];
+            if (lineMapping) {
+                sourceMapFile = sourceMap.sources[lineMapping.sourceIndex];
+            }
+        }
         for (const [_, breakpoint] of ipairs(breakpoints)) {
             if (breakpoint.enabled) {
-                let fileMatch: string | undefined;
+                let isBreakpoint = false;
                 if (breakpoint.line === info.currentline) {
-                    [fileMatch] = source.match(breakpoint.pattern);
+                    const checkLen = math.min(breakpoint.file.length, source.length);
+                    isBreakpoint = breakpoint.file.sub(-checkLen) === source.sub(-checkLen);
 
-                } else if (lineMapping && breakpoint.line === lineMapping.sourceLine) {
-                    // tslint:disable-next-line: no-non-null-assertion
-                    [fileMatch] = sourceMapFile!.match(breakpoint.pattern);
+                } else if (lineMapping && sourceMapFile && breakpoint.line === lineMapping.sourceLine) {
+                    const checkLen = math.min(breakpoint.file.length, sourceMapFile.length);
+                    isBreakpoint = breakpoint.file.sub(-checkLen) === sourceMapFile.sub(-checkLen);
                 }
 
-                if (fileMatch !== undefined) {
+                if (isBreakpoint) {
                     Send.debugBreak(`breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`, "breakpoint");
                     debugBreak(stack);
                     break;

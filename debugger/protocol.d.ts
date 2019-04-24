@@ -58,7 +58,6 @@ declare namespace LuaDebug {
     interface Breakpoint {
         line: number;
         file: string;
-        pattern: string;
         enabled: boolean;
     }
 

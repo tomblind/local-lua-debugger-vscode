@@ -63,6 +63,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private onConfigurationDone?: () => void;
     private readonly messageHandlerQueue: MessageHandler[] = [];
     private readonly variableHandles = new Handles<string>(ScopeType.Global + 1);
+    private breakpointsPending = false;
 
     public constructor() {
         super("lldbg-log.txt");
@@ -165,7 +166,7 @@ export class LuaDebugSession extends LoggingDebugSession {
                 oldLines = oldLines.filter(l => newLines.indexOf(l) === -1);
                 newLines = filteredNewLines;
                 for (const line of oldLines) {
-                    this.sendCommand(`break clear ${fileName}:${line}`);
+                    this.sendCommand(`break delete ${fileName}:${line}`);
                     await this.waitForMessage();
                 }
             }
@@ -174,6 +175,8 @@ export class LuaDebugSession extends LoggingDebugSession {
                 this.sendCommand(`break set ${fileName}:${line}`);
                 await this.waitForMessage();
             }
+        } else {
+            this.breakpointsPending = true;
         }
 
         this.fileBreakpointLines[filePath] = newLines;
@@ -406,7 +409,27 @@ export class LuaDebugSession extends LoggingDebugSession {
         return value;
     }
 
-    private onDebuggerOutput(data: unknown, isError: boolean) {
+    private async onDebuggerStop(msg: LuaDebug.DebugBreak) {
+        if (this.breakpointsPending) {
+            this.breakpointsPending = false;
+
+            for (const file in this.fileBreakpointLines) {
+                const lines = this.fileBreakpointLines[file];
+                for (const line of lines) {
+                    this.sendCommand(`break set ${file}:${line}`);
+                    await this.waitForMessage();
+                }
+            }
+        }
+
+        if (msg.breakType === "error") {
+            this.sendEvent(new StoppedEvent("exception", mainThreadId, msg.message));
+        } else {
+            this.sendEvent(new StoppedEvent("breakpoint", mainThreadId));
+        }
+    }
+
+    private async onDebuggerOutput(data: unknown, isError: boolean) {
         const dataStr = `${data}`;
         if (isError) {
             this.sendEvent(new OutputEvent(`[stderr] ${dataStr}`));
@@ -416,14 +439,11 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.outputText += dataStr;
 
         const [messages, processed, unprocessed] = Message.parse(this.outputText);
+        let debugBreak: LuaDebug.DebugBreak | undefined;
         for (const msg of messages) {
             this.sendEvent(new OutputEvent(`[message] ${JSON.stringify(msg)}`));
             if (msg.type === "debugBreak") {
-                if (msg.breakType === "error") {
-                    this.sendEvent(new StoppedEvent("exception", mainThreadId, msg.message));
-                } else {
-                    this.sendEvent(new StoppedEvent("breakpoint", mainThreadId));
-                }
+                debugBreak = msg;
             } else {
                 const handler = this.messageHandlerQueue.shift();
                 if (handler !== undefined) {
@@ -435,6 +455,10 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendEvent(new OutputEvent(`[stdout] ${processed}`));
 
         this.outputText = unprocessed;
+
+        if (debugBreak !== undefined) {
+            await this.onDebuggerStop(debugBreak);
+        }
     }
 
     private onDebuggerTerminated(result: string) {
