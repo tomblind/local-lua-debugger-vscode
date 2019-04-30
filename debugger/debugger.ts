@@ -32,37 +32,74 @@ function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val i
     return type(val) === luaTypeName;
 }
 
-function formatPath(pathStr: string) {
-    let [path] = pathStr.gsub("^[@=]", "");
-
-    let [drive] = pathStr.match("^[a-zA-Z]:");
-    if (drive !== undefined) {
-        drive = drive.upper();
-        path = path.sub(3);
-    } else if (pathStr.sub(1, 1) === "/") {
-        drive = "/";
-    }
-
-    const pathParts: string[] = [];
-    for (const [part] of path.gmatch("[^\\/]+")) {
-        if (part !== ".") {
-            if (part === ".." && pathParts.length > 0 && pathParts[pathParts.length - 1] !== "..") {
-                table.remove(pathParts);
-            } else {
-                table.insert(pathParts, part);
+namespace Path {
+    export const separator = (function() {
+        const config = (_G as Record<"package", Record<"config", string>>).package.config;
+        if (config) {
+            const [sep] = config.match("^[^\n]+");
+            if (sep) {
+                return sep;
             }
         }
-    }
-    path = table.concat(pathParts, "/");
+        return "/";
+    })();
 
-    return drive !== undefined ? `${drive}/${path}` : path;
+    let cwd: string | undefined;
+
+    export function getCwd() {
+        if (cwd === undefined) {
+            const [p] = io.popen(separator === "\\" && "cd" || "pwd");
+            cwd = p && p.read("*a") || "";
+        }
+        return cwd;
+    }
+
+    /** @tupleReturn */
+    export function splitDrive(path: string) {
+        let [drive, pathPart] = path.match(`^[@=]?([a-zA-Z]:[\\/])(.*)`);
+        if (drive !== undefined) {
+            drive = drive.upper();
+        } else {
+            [drive, pathPart] = path.match(`^[@=]?([\\/]*)(.*)`);
+        }
+        return [assert(drive), assert(pathPart)];
+    }
+
+    export function format(path: string) {
+        const [drive, pathOnly] = splitDrive(path);
+
+        const pathParts: string[] = [];
+        for (const [part] of assert(pathOnly).gmatch("[^\\/]+")) {
+            if (part !== ".") {
+                if (part === ".." && pathParts.length > 0 && pathParts[pathParts.length - 1] !== "..") {
+                    table.remove(pathParts);
+                } else {
+                    table.insert(pathParts, part);
+                }
+            }
+        }
+
+        return `${drive}${table.concat(pathParts, separator)}`;
+    }
+
+    export function isAbsolute(path: string) {
+        const [drive] = splitDrive(path);
+        return drive.length > 0;
+    }
+
+    export function getAbsolute(path: string) {
+        if (isAbsolute(path)) {
+            return format(path);
+        }
+        return format(`${getCwd()}${separator}${path}`);
+    }
 }
 
 namespace Breakpoint {
     let current: LuaDebug.Breakpoint[] = [];
 
     export function get(file: string, line: number): LuaDebug.Breakpoint | undefined {
-        file = formatPath(file);
+        file = Path.format(file);
         for (const [_, breakpoint] of ipairs(current)) {
             if (breakpoint.file === file && breakpoint.line === line) {
                 return breakpoint;
@@ -76,11 +113,11 @@ namespace Breakpoint {
     }
 
     export function add(file: string, line: number) {
-        table.insert(current, {file: formatPath(file), line, enabled: true});
+        table.insert(current, {file: Path.format(file), line, enabled: true});
     }
 
     export function remove(file: string, line: number) {
-        file = formatPath(file);
+        file = Path.format(file);
         for (const [i, breakpoint] of ipairs(current)) {
             if (breakpoint.file === file && breakpoint.line === line) {
                 table.remove(current, i);
@@ -185,8 +222,11 @@ namespace SourceMap
 
         const sourceMap: SourceMap = {sources: []};
 
-        for (const [source] of sources.gmatch('"([^"]+)"')) {
-            table.insert(sourceMap.sources, formatPath(sourceRoot && `${sourceRoot}/${source}` || source));
+        for (let [source] of sources.gmatch('"([^"]+)"')) {
+            if (sourceRoot) {
+                source = `${sourceRoot}${Path.separator}${source}`;
+            }
+            table.insert(sourceMap.sources, Path.getAbsolute(source));
         }
 
         let line = 1;
@@ -482,7 +522,7 @@ namespace Debugger {
         for (let i = 0; i < stack.length; ++i) {
             const info = stack[i];
             const frame: LuaDebug.Frame = {
-                source: info.source && formatPath(info.source) || "?",
+                source: info.source && Path.format(info.source) || "?",
                 line: info.currentline && assert(tonumber(info.currentline)) || -1
             };
             if (info.source && info.currentline) {
@@ -614,7 +654,7 @@ namespace Debugger {
         const frameOffset = 3;
         let frame = 0;
         let info = stack[frame];
-        backtrace(stack, frame);
+        // backtrace(stack, frame);
         while (true) {
             const inp = getInput();
             if (inp === "cont" || inp === "continue") {
@@ -829,6 +869,18 @@ namespace Debugger {
         return stack;
     }
 
+    function comparePaths(a: string, b: string) {
+        const aLen = a.length;
+        const bLen = b.length;
+        if (aLen === bLen) {
+            return a === b;
+        } else if (aLen < bLen) {
+            return "/" + a === b.sub(-(aLen + 1));
+        } else {
+            return "/" + b === a.sub(-(bLen + 1));
+        }
+    }
+
     function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
         const stack = getStack();
         if (!stack) {
@@ -847,7 +899,7 @@ namespace Debugger {
             return;
         }
 
-        const source = formatPath(assert(info.source));
+        const source = Path.format(assert(info.source));
         const sourceMap = SourceMap.get(source);
         let sourceMapFile: string | undefined;
         let lineMapping: SourceLineMapping | undefined;
@@ -858,22 +910,18 @@ namespace Debugger {
             }
         }
         for (const [_, breakpoint] of ipairs(breakpoints)) {
-            if (breakpoint.enabled) {
-                let isBreakpoint = false;
-                if (breakpoint.line === info.currentline) {
-                    const checkLen = math.min(breakpoint.file.length, source.length);
-                    isBreakpoint = breakpoint.file.sub(-checkLen) === source.sub(-checkLen);
-
-                } else if (lineMapping && sourceMapFile && breakpoint.line === lineMapping.sourceLine) {
-                    const checkLen = math.min(breakpoint.file.length, sourceMapFile.length);
-                    isBreakpoint = breakpoint.file.sub(-checkLen) === sourceMapFile.sub(-checkLen);
-                }
-
-                if (isBreakpoint) {
-                    Send.debugBreak(`breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`, "breakpoint");
-                    debugBreak(stack);
-                    break;
-                }
+            if (breakpoint.enabled
+                && ((breakpoint.line === info.currentline && comparePaths(breakpoint.file, source))
+                    || (lineMapping
+                        && sourceMapFile
+                        && breakpoint.line === lineMapping.sourceLine
+                        && comparePaths(breakpoint.file, sourceMapFile)
+                    )
+                )
+            ) {
+                Send.debugBreak(`breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`, "breakpoint");
+                debugBreak(stack);
+                break;
             }
         }
     }
