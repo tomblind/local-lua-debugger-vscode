@@ -654,7 +654,6 @@ namespace Debugger {
         const frameOffset = 3;
         let frame = 0;
         let info = stack[frame];
-        // backtrace(stack, frame);
         while (true) {
             const inp = getInput();
             if (inp === "cont" || inp === "continue") {
@@ -875,9 +874,9 @@ namespace Debugger {
         if (aLen === bLen) {
             return a === b;
         } else if (aLen < bLen) {
-            return "/" + a === b.sub(-(aLen + 1));
+            return Path.separator + a === b.sub(-(aLen + 1));
         } else {
-            return "/" + b === a.sub(-(bLen + 1));
+            return Path.separator + b === a.sub(-(bLen + 1));
         }
     }
 
