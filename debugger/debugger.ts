@@ -65,21 +65,26 @@ namespace Path {
         return [assert(drive), assert(pathPart)];
     }
 
-    export function format(path: string) {
-        const [drive, pathOnly] = splitDrive(path);
+    const formattedPathCache: Record<string, string> = {};
 
-        const pathParts: string[] = [];
-        for (const [part] of assert(pathOnly).gmatch("[^\\/]+")) {
-            if (part !== ".") {
-                if (part === ".." && pathParts.length > 0 && pathParts[pathParts.length - 1] !== "..") {
-                    table.remove(pathParts);
-                } else {
-                    table.insert(pathParts, part);
+    export function format(path: string) {
+        let formattedPath = formattedPathCache[path];
+        if (!formattedPath) {
+            const [drive, pathOnly] = splitDrive(path);
+            const pathParts: string[] = [];
+            for (const [part] of assert(pathOnly).gmatch("[^\\/]+")) {
+                if (part !== ".") {
+                    if (part === ".." && pathParts.length > 0 && pathParts[pathParts.length - 1] !== "..") {
+                        table.remove(pathParts);
+                    } else {
+                        table.insert(pathParts, part);
+                    }
                 }
             }
+            formattedPath = `${drive}${table.concat(pathParts, separator)}`;
+            formattedPathCache[path] = formattedPath;
         }
-
-        return `${drive}${table.concat(pathParts, separator)}`;
+        return formattedPath;
     }
 
     export function isAbsolute(path: string) {

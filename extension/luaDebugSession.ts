@@ -23,16 +23,13 @@ type LaunchRequestArguments = DebugProtocol.LaunchRequestArguments & (LuaProgram
     cwd?: string;
     env?: NodeJS.ProcessEnv;
     sourceRoot?: string;
+    breakOnAttach?: boolean;
     extensionPath?: string;
 };
 
 function isLuaProgramConfig(config: LuaProgramConfig | CustomProgramConfig): config is LuaProgramConfig {
     return (config as LuaProgramConfig).lua !== undefined;
 }
-
-type MessageTypeName = LuaDebug.Message["type"];
-
-type MessageTypeOf<T extends MessageTypeName> = Extract<LuaDebug.Message, { type: T }>;
 
 interface MessageHandler<T extends LuaDebug.Message = LuaDebug.Message> {
     (msg: T): void;
@@ -66,6 +63,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private readonly messageHandlerQueue: MessageHandler[] = [];
     private readonly variableHandles = new Handles<string>(ScopeType.Global + 1);
     private breakpointsPending = false;
+    private autoContinueNext = false;
 
     public constructor() {
         super("lldbg-log.txt");
@@ -82,6 +80,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         response.body.supportsConfigurationDoneRequest = true;
         response.body.supportsEvaluateForHovers = true;
         response.body.supportsSetVariable = true;
+        response.body.supportsTerminateRequest = true;
 
         this.sendEvent(new OutputEvent("[request] initializeRequest"));
         this.sendResponse(response);
@@ -107,21 +106,24 @@ export class LuaDebugSession extends LoggingDebugSession {
         await this.waitForConfiguration();
 
         this.sourceRoot = args.sourceRoot;
-
         this.cwd = this.assert(args.cwd);
-        const options/* : child_process.SpawnOptions */ = {
+        this.autoContinueNext = args.breakOnAttach !== true;
+
+        //Process options
+        const options = {
             env: Object.assign({}, process.env),
             cwd: this.cwd,
             shell: true
         };
 
-        if (args.env!== undefined) {
+        if (args.env !== undefined) {
             for (const key in args.env) {
                 const envKey = getEnvKey(options.env, key);
                 options.env[envKey] = args.env[key];
             }
         }
 
+        //Append lua path so it can find debugger script
         const luaPathKey = getEnvKey(options.env, "LUA_PATH");
         let luaPath = options.env[luaPathKey];
         if (luaPath === undefined) {
@@ -131,6 +133,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         }
         options.env[luaPathKey] = luaPath + `${this.assert(args.extensionPath)}/?.lua`;
 
+        //Lua interpreter
         if (isLuaProgramConfig(args)) {
             this.process = child_process.spawn(
                 args.lua,
@@ -138,14 +141,16 @@ export class LuaDebugSession extends LoggingDebugSession {
                 options
             );
 
+        //Custom executable
         } else {
             this.process = child_process.spawn(
                 args.executable,
-                [/* TODO */],
+                args.args,
                 options
             );
         }
 
+        //Process callbacks
         this.assert(this.process.stdout).on("data", data => this.onDebuggerOutput(data, false));
         this.assert(this.process.stderr).on("data", data => this.onDebuggerOutput(data, true));
         this.process.on("close", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
@@ -258,7 +263,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         const scopes: Scope[] = [
             new Scope("Local", ScopeType.Local, false),
-            new Scope("Upvalue", ScopeType.Upvalue, false),
+            new Scope("Upvalues", ScopeType.Upvalue, false),
             new Scope("Global", ScopeType.Global, false)
         ];
         response.body = {scopes};
@@ -382,6 +387,21 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
+    protected terminateRequest(
+        response: DebugProtocol.TerminateResponse,
+        args: DebugProtocol.TerminateArguments
+    ): void {
+        this.sendEvent(new OutputEvent(`[request] terminateRequest`));
+        if (this.process !== undefined) {
+            if (process.platform === "win32") {
+                child_process.spawn("taskkill", ["/pid", this.process.pid.toString(), "/f", "/t"]);
+            } else {
+                this.process.kill();
+            }
+        }
+        this.sendResponse(response);
+    }
+
     private async getEvaluateResult(expression: string): Promise<[string, number]> {
         const msg = await this.waitForMessage();
         let result = "[error]";
@@ -454,6 +474,13 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         if (msg.breakType === "error") {
             this.sendEvent(new StoppedEvent("exception", mainThreadId, msg.message));
+            return;
+        }
+
+        if (this.autoContinueNext) {
+            this.autoContinueNext = false;
+            this.sendCommand("cont");
+
         } else {
             this.sendEvent(new StoppedEvent("breakpoint", mainThreadId));
         }

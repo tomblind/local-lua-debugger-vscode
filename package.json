@@ -61,6 +61,11 @@
 								"type": "string",
 								"description": "Root path of source mapped files."
 							},
+							"breakOnAttach": {
+								"type": "boolean",
+								"description": "Pause debugging as soon as debugger attaches to program.",
+								"default": false
+							},
 							"lua": {
 								"type": "string",
 								"description": "The Lua executable to use.",
