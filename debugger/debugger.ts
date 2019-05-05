@@ -28,6 +28,13 @@ interface LuaTypeMap {
     userdata: LuaUserData;
 }
 
+/** @luaTable */
+declare class LuaTable<K, V> {
+    public readonly length: number;
+    public get(key: K): V;
+    public set(key: K, value: V): void;
+}
+
 function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val is LuaTypeMap[T] {
     return type(val) === luaTypeName;
 }
@@ -367,11 +374,12 @@ namespace Format {
         return true;
     }
 
-    export function formatAsJson(val: unknown, indent = 0, tables?: {[t: string]: boolean}) {
-        tables = tables || {};
+    export function formatAsJson(val: unknown, indent = 0, tables?: LuaTable<unknown, boolean>) {
+        tables = tables || new LuaTable();
+
         const valType = type(val);
-        if (valType === "table" && tables[val as string] === undefined) {
-            tables[val as string] = true;
+        if (valType === "table" && tables.get(val) === undefined) {
+            tables.set(val, true);
 
             if (isArray(val)) {
                 const arrayVals: string[] = [];
