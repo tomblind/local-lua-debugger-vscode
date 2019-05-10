@@ -666,7 +666,7 @@ namespace Debugger {
         breakAtDepth = 0;
         const frameOffset = 3;
         let frame = 0;
-        let info = stack[frame];
+        let info = assert(stack[frame]);
         while (true) {
             const inp = getInput();
             if (inp === "cont" || inp === "continue") {
@@ -721,7 +721,7 @@ namespace Debugger {
                 const newFrame = assert(tonumber(newFrameStr));
                 if (newFrame !== undefined && newFrame > 0 && newFrame <= stack.length) {
                     frame = newFrame - 1;
-                    info = stack[newFrame];
+                    info = assert(stack[frame]);
                     backtrace(stack, frame);
                 } else {
                     Send.error("Bad frame");
