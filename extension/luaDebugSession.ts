@@ -15,9 +15,9 @@ import {
     Handles
 } from "vscode-debugadapter";
 import * as child_process from "child_process";
-import {Message} from "./message";
 import * as path from "path";
 import * as fs from "fs";
+import {Message} from "./message";
 
 type LaunchRequestArguments = DebugProtocol.LaunchRequestArguments & (LuaProgramConfig | CustomProgramConfig) & {
     cwd?: string;
@@ -102,53 +102,52 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     protected async launchRequest(response: DebugProtocol.LaunchResponse, args: LaunchRequestArguments) {
-        this.sendEvent(new OutputEvent(`[request] launchRequest ${process.cwd()}`));
+        this.sendEvent(new OutputEvent(`[request] launchRequest`));
         await this.waitForConfiguration();
 
         this.sourceRoot = args.sourceRoot;
         this.cwd = this.assert(args.cwd);
         this.autoContinueNext = args.breakOnAttach !== true;
 
-        //Process options
-        const options = {
+        //Setup process
+        const processOptions: child_process.SpawnOptions = {
             env: Object.assign({}, process.env),
             cwd: this.cwd,
-            shell: true
+            shell: true,
+            // detached: true
         };
+        processOptions.env = this.assert(processOptions.env);
 
         if (args.env !== undefined) {
             for (const key in args.env) {
-                const envKey = getEnvKey(options.env, key);
-                options.env[envKey] = args.env[key];
+                const envKey = getEnvKey(processOptions.env, key);
+                processOptions.env[envKey] = args.env[key];
             }
         }
 
         //Append lua path so it can find debugger script
-        const luaPathKey = getEnvKey(options.env, "LUA_PATH");
-        let luaPath = options.env[luaPathKey];
+        const luaPathKey = getEnvKey(processOptions.env, "LUA_PATH");
+        let luaPath = processOptions.env[luaPathKey];
         if (luaPath === undefined) {
             luaPath = "";
         } else if (luaPath.length > 0 && !luaPath.endsWith(";")) {
             luaPath += ";";
         }
-        options.env[luaPathKey] = luaPath + `${this.assert(args.extensionPath)}/?.lua`;
+        processOptions.env[luaPathKey] = luaPath + `${this.assert(args.extensionPath)}/?.lua`;
 
-        //Lua interpreter
+        //Launch process
+        let processExecutable: string;
+        let processArgs: string[];
         if (isLuaProgramConfig(args)) {
-            this.process = child_process.spawn(
-                args.lua,
-                ["-e", `"require('debugger').start([[${args.file}]])"`],
-                options
-            );
+            processExecutable = args.lua;
+            processArgs = ["-e", `"require('debugger').start([[${args.file}]])"`];
 
-        //Custom executable
         } else {
-            this.process = child_process.spawn(
-                args.executable,
-                args.args,
-                options
-            );
+            processExecutable = args.executable;
+            processArgs = args.args !== undefined ? args.args : [];
         }
+        this.process = child_process.spawn(processExecutable, processArgs, processOptions);
+        this.sendEvent(new OutputEvent(`[request] launchRequest ${processExecutable} ${processArgs.join(" ")}`));
 
         //Process callbacks
         this.assert(this.process.stdout).on("data", data => this.onDebuggerOutput(data, false));
@@ -473,6 +472,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         }
 
         if (msg.breakType === "error") {
+            this.sendEvent(new OutputEvent(`[error] ${msg.message}`));
             this.sendEvent(new StoppedEvent("exception", mainThreadId, msg.message));
             return;
         }

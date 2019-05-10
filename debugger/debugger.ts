@@ -976,6 +976,11 @@ export function requestBreak() {
     Debugger.triggerBreak();
 }
 
+//Stop debugger
+export function stop() {
+    Debugger.clearHook();
+}
+
 //Start debugger
 export function start(entry?: string | { (this: void): void }, breakImmediately?: boolean) {
     if (isType(entry, "string")) {
@@ -989,18 +994,34 @@ export function start(entry?: string | { (this: void): void }, breakImmediately?
     }
 
     if (entry !== undefined) {
-        xpcall(entry, message => {
-            const stack = Debugger.getStack() || [];
-            Send.debugBreak(message && ("error: " + message) || "error", "error");
-            Debugger.debugBreak(stack);
-        });
+        xpcall(
+            () => {
+                (entry as { (this: void): void })();
+                stop();
+            },
+            err => {
+                const stack = Debugger.getStack() || [];
+                Send.debugBreak(tostring(err), "error");
+                Debugger.debugBreak(stack);
+            }
+        );
     }
 }
 
-//Stop debugger
-export function stop() {
-    Debugger.clearHook();
-}
+//Override debug.traceback
+const luaDebugTraceback = debug.traceback;
+debug.traceback = (threadOrMessage?: LuaThread | string, messageOrLevel?: string | number, level?: number): string => {
+    let trace = luaDebugTraceback(threadOrMessage as LuaThread, messageOrLevel as string, level as number);
+    if (trace) {
+        trace = Debugger.mapSources(trace);
+    }
+
+    const stack = Debugger.getStack() || [];
+    Send.debugBreak(trace || "error", "error");
+    Debugger.debugBreak(stack);
+
+    return trace;
+};
 
 //Don't buffer io
 io.stdout.setvbuf("no");
