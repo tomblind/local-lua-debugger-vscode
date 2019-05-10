@@ -139,11 +139,11 @@ export class LuaDebugSession extends LoggingDebugSession {
         let processExecutable: string;
         let processArgs: string[];
         if (isLuaProgramConfig(args)) {
-            processExecutable = args.lua;
+            processExecutable = `"${args.lua}"`;
             processArgs = ["-e", `"require('debugger').start([[${args.file}]])"`];
 
         } else {
-            processExecutable = args.executable;
+            processExecutable = `"${args.executable}"`;
             processArgs = args.args !== undefined ? args.args : [];
         }
         this.process = child_process.spawn(processExecutable, processArgs, processOptions);
