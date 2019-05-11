@@ -356,7 +356,7 @@ namespace Format {
         return escaped;
     }
 
-    export function isArray(val: unknown) {
+    function isArray(val: unknown) {
         if ((val as ExplicitArray)[arrayTag]) {
             return true;
         }
@@ -374,7 +374,7 @@ namespace Format {
         return true;
     }
 
-    export function formatAsJson(val: unknown, indent = 0, tables?: LuaTable<unknown, boolean>) {
+    export function asJson(val: unknown, indent = 0, tables?: LuaTable<unknown, boolean>) {
         tables = tables || new LuaTable();
 
         const valType = type(val);
@@ -384,7 +384,7 @@ namespace Format {
             if (isArray(val)) {
                 const arrayVals: string[] = [];
                 for (const [_, arrayVal] of ipairs(val as unknown[])) {
-                    const valStr = formatAsJson(arrayVal, indent + 1, tables);
+                    const valStr = asJson(arrayVal, indent + 1, tables);
                     table.insert(arrayVals, `\n${indentStr.rep(indent + 1)}${valStr}`);
                 }
                 return `[${table.concat(arrayVals, ",")}\n${indentStr.rep(indent)}]`;
@@ -392,7 +392,7 @@ namespace Format {
             } else {
                 const kvps: string[] = [];
                 for (const [k, v] of pairs(val as object)) {
-                    const valStr = formatAsJson(v, indent + 1, tables);
+                    const valStr = asJson(v, indent + 1, tables);
                     table.insert(kvps, `\n${indentStr.rep(indent + 1)}"${escape(tostring(k))}": ${valStr}`);
                 }
                 return (kvps.length > 0) ? `{${table.concat(kvps, ",")}\n${indentStr.rep(indent)}}` : "{}";
@@ -421,25 +421,29 @@ namespace Send {
         }
     }
 
+    function send(message: LuaDebug.MessageBase) {
+        io.write(Format.asJson(message) + "\n");
+    }
+
     export function error(err: string) {
         const dbgError: LuaDebug.Error = {tag: "$luaDebug", type: "error", error: err};
-        print(Format.formatAsJson(dbgError));
+        send(dbgError);
     }
 
     export function debugBreak(message: string, breakType: LuaDebug.DebugBreak["breakType"]) {
         const dbgBreak: LuaDebug.DebugBreak = {tag: "$luaDebug", type: "debugBreak", message, breakType};
-        print(Format.formatAsJson(dbgBreak));
+        send(dbgBreak);
     }
 
     export function result(value: unknown) {
         const dbgVal: LuaDebug.Value = {type: type(value), value: getPrintableValue(value)};
         const dbgResult: LuaDebug.Result = {tag: "$luaDebug", type: "result", result: dbgVal};
-        print(Format.formatAsJson(dbgResult));
+        send(dbgResult);
     }
 
     export function frames(frameList: LuaDebug.Frame[]) {
         const dbgStack: LuaDebug.Stack = {tag: "$luaDebug", type: "stack", frames: frameList};
-        print(Format.formatAsJson(dbgStack));
+        send(dbgStack);
     }
 
     export function locals(locs: Locals) {
@@ -452,7 +456,7 @@ namespace Send {
             const dbgVar: LuaDebug.Variable = {type: info.type, name, value: getPrintableValue(info.val)};
             table.insert(dbgVariables.variables, dbgVar);
         }
-        print(Format.formatAsJson(dbgVariables));
+        send(dbgVariables);
     }
 
     export function vars(varsObj: Vars) {
@@ -465,7 +469,7 @@ namespace Send {
             const dbgVar: LuaDebug.Variable = {type: info.type, name, value: getPrintableValue(info.val)};
             table.insert(dbgVariables.variables, dbgVar);
         }
-        print(Format.formatAsJson(dbgVariables));
+        send(dbgVariables);
     }
 
     export function props(tbl: object) {
@@ -483,7 +487,7 @@ namespace Send {
         if (meta !== undefined) {
             dbgProperties.metatable = {type: type(meta), value: getPrintableValue(meta)};
         }
-        print(Format.formatAsJson(dbgProperties));
+        send(dbgProperties);
     }
 
     export function breakpoints(breaks: LuaDebug.Breakpoint[]) {
@@ -492,11 +496,11 @@ namespace Send {
             type: "breakpoints",
             breakpoints: Format.makeExplicitArray(breaks)
         };
-        print(Format.formatAsJson(dbgBreakpoints));
+        send(dbgBreakpoints);
     }
 
     export function help(helpStrs: string[]) {
-        print(Format.formatAsJson(helpStrs));
+        io.write(table.concat(helpStrs, "\n") + "\n");
     }
 }
 
@@ -657,8 +661,8 @@ namespace Debugger {
     let breakAtDepth = 0;
 
     function getInput() {
-        io.stdout.write(prompt);
-        const inp = io.stdin.read("*l");
+        io.write(prompt);
+        const inp = io.read("*l");
         return inp;
     }
 
@@ -982,9 +986,9 @@ export function stop() {
 }
 
 //Start debugger
-export function start(entry?: string | { (this: void): void }, breakImmediately?: boolean) {
-    if (isType(entry, "string")) {
-        [entry] = assert(...loadfile(entry));
+export function start(entryPoint?: string | { (this: void): void }, breakImmediately?: boolean) {
+    if (isType(entryPoint, "string")) {
+        [entryPoint] = assert(...loadfile(entryPoint));
     }
 
     Debugger.setHook();
@@ -993,15 +997,16 @@ export function start(entry?: string | { (this: void): void }, breakImmediately?
         Debugger.triggerBreak();
     }
 
-    if (entry !== undefined) {
+    if (entryPoint !== undefined) {
         xpcall(
             () => {
-                (entry as { (this: void): void })();
+                (entryPoint as { (this: void): void })();
                 stop();
             },
             err => {
                 const stack = Debugger.getStack() || [];
-                Send.debugBreak(tostring(err), "error");
+                err = Debugger.mapSources(tostring(err));
+                Send.debugBreak(err, "error");
                 Debugger.debugBreak(stack);
             }
         );

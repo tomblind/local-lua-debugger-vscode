@@ -173,7 +173,6 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`setBreakPointsRequest`, OutputCategory.Request);
 
         const filePath = args.source.path as string;
-        const fileName = path.basename(filePath);
 
         let newLines = args.breakpoints !== undefined ? args.breakpoints.map(bp => bp.line) : [];
 
@@ -184,13 +183,13 @@ export class LuaDebugSession extends LoggingDebugSession {
                 oldLines = oldLines.filter(l => newLines.indexOf(l) === -1);
                 newLines = filteredNewLines;
                 for (const line of oldLines) {
-                    this.sendCommand(`break delete ${fileName}:${line}`);
+                    this.sendCommand(`break delete ${filePath}:${line}`);
                     await this.waitForMessage();
                 }
             }
 
             for (const line of newLines) {
-                this.sendCommand(`break set ${fileName}:${line}`);
+                this.sendCommand(`break set ${filePath}:${line}`);
                 await this.waitForMessage();
             }
         } else {
@@ -554,6 +553,10 @@ export class LuaDebugSession extends LoggingDebugSession {
             if (msg.length > 0) {
                 this.sendEvent(new OutputEvent(`${msg}`, category));
             }
+
+        } else if (category === OutputCategory.Error) {
+            this.sendEvent(new OutputEvent(`[${category}] ${msg}`, "stderr"));
+
         } else if (this.config !== undefined && this.config.verbose === true) {
             this.sendEvent(new OutputEvent(`[${category}] ${msg}`));
         }
