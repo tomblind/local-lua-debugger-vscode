@@ -45,64 +45,92 @@
 				"configurationAttributes": {
 					"launch": {
 						"properties": {
-							"cwd": {
-								"type": "string",
-								"description": "Working directory to launch lua/executable in.",
-								"default": "${workspaceFolder}"
-							},
-							"env": {
-								"type": "object",
-								"description": "Environment variables to set.",
-								"additionalProperties": {
-									"type": "string"
-								}
-							},
 							"sourceRoot": {
 								"type": "string",
 								"description": "Root path of source mapped files."
+							},
+							"verbose": {
+								"type": "boolean",
+								"description": "Enable verbose output.",
+								"default": false
 							},
 							"breakOnAttach": {
 								"type": "boolean",
 								"description": "Pause debugging as soon as debugger attaches to program.",
 								"default": false
 							},
-							"lua": {
-								"type": "string",
-								"description": "The Lua executable to use.",
-								"default": "lua"
-							},
-							"file": {
-								"type": "string",
-								"description": "The lua file to pass to lua to start the program.",
-								"default": "${file}"
-							},
-							"executable": {
-								"type": "string",
-								"description": "The custom executable to run.",
-								"default": ""
-							},
-							"args": {
-								"type": "array",
-								"description": "Arguments to pass to the custom executable.",
-								"default": [],
-								"items": {
-									"type": "string"
-								}
+							"launch": {
+								"oneOf": [
+									{
+										"type": "object",
+										"properties": {
+											"lua": {
+												"type": "string",
+												"description": "The Lua executable to use.",
+												"default": "lua"
+											},
+											"file": {
+												"type": "string",
+												"description": "The lua file to pass to lua to start the program.",
+												"default": "${file}"
+											},
+											"cwd": {
+												"type": "string",
+												"description": "Working directory to launch lua/executable in.",
+												"default": "${workspaceFolder}"
+											},
+											"env": {
+												"type": "object",
+												"description": "Environment variables to set.",
+												"additionalProperties": {
+													"type": "string"
+												}
+											}
+										},
+										"required": [
+											"file",
+											"lua"
+										],
+										"additionalProperties": false
+									},
+									{
+										"type": "object",
+										"properties": {
+											"executable": {
+												"type": "string",
+												"description": "The custom executable to run."
+											},
+											"args": {
+												"type": "array",
+												"items": {
+													"type": "string"
+												},
+												"description": "Arguments to pass to the custom executable.",
+												"default": []
+											},
+											"cwd": {
+												"type": "string",
+												"description": "Working directory to launch lua/executable in.",
+												"default": "${workspaceFolder}"
+											},
+											"env": {
+												"type": "object",
+												"description": "Environment variables to set.",
+												"additionalProperties": {
+													"type": "string"
+												}
+											}
+										},
+										"required": [
+											"executable"
+										],
+										"additionalProperties": false
+									}
+								]
 							}
 						},
-						"oneOf": [
-							{
-								"required": [
-									"lua",
-									"file"
-								]
-							},
-							{
-								"required": [
-									"executable",
-									"args"
-								]
-							}
+						"require": [
+							"launch"
 						]
 					}
 				}

@@ -505,7 +505,7 @@ namespace Debugger {
         [name: string]: unknown;
     }
 
-    const prompt = "> ";
+    const prompt = "";
 
     /** @tupleReturn */
     declare function load(

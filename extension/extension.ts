@@ -1,20 +1,44 @@
 import * as vscode from "vscode";
 import * as Net from "net";
 import {LuaDebugSession} from "./luaDebugSession";
+import {LaunchConfig, isLuaProgramConfig} from "./launchConfig";
 
 const enableServer = true;
+
+function abortLaunch(message: string) {
+    vscode.window.showErrorMessage(message);
+    // tslint:disable-next-line:no-null-keyword
+    return null;
+}
 
 const configurationProvider: vscode.DebugConfigurationProvider = {
     resolveDebugConfiguration(
         folder: vscode.WorkspaceFolder | undefined,
-        config: vscode.DebugConfiguration,
+        config: vscode.DebugConfiguration & Partial<LaunchConfig>,
         token?: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.DebugConfiguration> {
-        const extension = vscode.extensions.getExtension("tom-blind.local-lua-debugger-vscode");
-        config.extensionPath = extension !== undefined ? `${extension.extensionPath}/out` : ".";
-        if (config.cwd === undefined) {
+        // Validate config
+        if (config.launch === undefined) {
+            return abortLaunch("No launch parameters set.");
+
+        } else if (isLuaProgramConfig(config.launch)) {
+            if (config.launch.file === undefined) {
+                return abortLaunch("No lua file specified.");
+            }
+
+        } else if (config.launch.executable === undefined) {
+            return abortLaunch("No launch parameters set.");
+        }
+
+        // Set required defaults
+        if (config.launch.cwd === undefined) {
             config.cwd = folder !== undefined ? folder.uri : ".";
         }
+
+        // Pass extension path to debugger
+        const extension = vscode.extensions.getExtension("tom-blind.local-lua-debugger-vscode");
+        config.extensionPath = extension !== undefined ? `${extension.extensionPath}/out` : ".";
+
         return config;
     }
 };
