@@ -53,6 +53,7 @@ declare namespace LuaDebug {
         type: "properties";
         properties: Variable[];
         metatable?: Value;
+        length?: number;
     }
 
     interface Result extends MessageBase {

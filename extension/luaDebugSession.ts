@@ -34,6 +34,42 @@ function getEnvKey(env: NodeJS.ProcessEnv, searchKey: string) {
     return searchKey;
 }
 
+function sortVariables(a: Variable, b: Variable): number {
+    const aIsBracketted = a.name.startsWith("[[");
+    const bIsBracketted = b.name.startsWith("[[");
+    if (aIsBracketted !== bIsBracketted) {
+        return aIsBracketted ? -1 : 1;
+    }
+
+    const aAsNum = +a.name;
+    const bAsNum = +b.name;
+    const aIsNum = !isNaN(aAsNum);
+    const bIsNum = !isNaN(bAsNum);
+    if (aIsNum !== bIsNum) {
+        return aIsNum ? -1 : 1;
+    } else if (aIsNum && bIsNum) {
+        return aAsNum - bAsNum;
+    }
+
+    let aName = a.name.replace("[", " ");
+    let bName = b.name.replace("[", " ");
+
+    const aNameLower = aName.toLowerCase();
+    const bNameLower = bName.toLowerCase();
+    if (aNameLower !== bNameLower) {
+        aName = aNameLower;
+        bName = bNameLower;
+    }
+
+    if (aName === bName) {
+        return 0;
+    } else if (aName < bName) {
+        return -1;
+    } else {
+        return 1;
+    }
+}
+
 const enum ScopeType {
     Local = 1,
     Upvalue,
@@ -51,6 +87,8 @@ const enum OutputCategory {
 }
 
 const mainThreadId = 1;
+const metatableDisplayName = "[[metatable]]";
+const tableLengthDisplayName = "[[length]]";
 
 export class LuaDebugSession extends LoggingDebugSession {
     private readonly fileBreakpointLines: { [file: string]: number[] } = {};
@@ -321,10 +359,16 @@ export class LuaDebugSession extends LoggingDebugSession {
                 variables.push(this.buildVariable(variable, refName));
             }
 
-            if (vars.metatable !== undefined) {
-                variables.push(this.buildVariable(vars.metatable, `getmetatable(${baseName})`, "[metatable]"));
+            if (vars.metatable !== undefined && baseName !== undefined) {
+                variables.push(this.buildVariable(vars.metatable, `getmetatable(${baseName})`, metatableDisplayName));
+            }
+
+            if (vars.length !== undefined) {
+                const value: LuaDebug.Value = {type: "number", value: vars.length.toString()};
+                variables.push(this.buildVariable(value, "#${baseName}", tableLengthDisplayName));
             }
         }
+        variables.sort(sortVariables);
 
         response.body = {variables};
         this.sendResponse(response);
@@ -362,20 +406,39 @@ export class LuaDebugSession extends LoggingDebugSession {
         response: DebugProtocol.SetVariableResponse,
         args: DebugProtocol.SetVariableArguments
     ) {
-        let name: string;
-        if (args.variablesReference > ScopeType.Global) {
-            name = `${this.variableHandles.get(args.variablesReference)}[${args.name}]`;
+        if (args.variablesReference === ScopeType.Global
+            || args.variablesReference === ScopeType.Local
+            || args.variablesReference === ScopeType.Upvalue
+        ) {
+            this.showOutput(`setVariableRequest ${args.name} = ${args.value}`, OutputCategory.Request);
+            this.sendCommand(`exec ${args.name} = ${args.value}; return ${args.name}`);
+
+        } else if (args.name === metatableDisplayName) {
+            const name = this.variableHandles.get(args.variablesReference);
+            this.showOutput(`setVariableRequest ${name}[[metatable]] = ${args.value}`, OutputCategory.Request);
+            this.sendCommand(`eval setmetatable(${name}, ${args.value})`);
+
+        } else if (args.name === tableLengthDisplayName) {
+            const name = this.variableHandles.get(args.variablesReference);
+            this.showOutput(`setVariableRequest ${name}[[length]] = ${args.value}`, OutputCategory.Request);
+            this.sendCommand(`eval #${name}`);
+
         } else {
-            name = args.name;
+            const name = `${this.variableHandles.get(args.variablesReference)}[${args.name}]`;
+            this.showOutput(`setVariableRequest ${name} = ${args.value}`, OutputCategory.Request);
+            this.sendCommand(`exec ${name} = ${args.value}; return ${name}`);
         }
 
-        this.showOutput(`setVariableRequest ${name} = ${args.value}`, OutputCategory.Request);
+        const result = await this.getEvaluateResult(args.value);
+        if (!result.success) {
+            if (result.error !== undefined) {
+                this.showOutput(result.error, OutputCategory.Error);
+            }
 
-        this.sendCommand(`exec ${name} = ${args.value}; return ${name}`);
+        } else {
+            response.body = result;
+        }
 
-        const [value, variableReference] = await this.getEvaluateResult(args.value);
-
-        response.body = {value, variablesReference: variableReference};
         this.sendResponse(response);
     }
 
@@ -388,9 +451,17 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         this.sendCommand(`eval ${expression}`);
 
-        const [result, variableReference] = await this.getEvaluateResult(expression);
+        const result = await this.getEvaluateResult(expression);
+        if (!result.success) {
+            if (result.error !== undefined) {
+                this.showOutput(result.error, OutputCategory.Error);
+                response.body = {result: result.error, variablesReference: 0};
+            }
 
-        response.body = {result, variablesReference: variableReference};
+        } else {
+            response.body = {result: result.value, variablesReference: result.variablesReference};
+        }
+
         this.sendResponse(response);
     }
 
@@ -410,19 +481,21 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    private async getEvaluateResult(expression: string): Promise<[string, number]> {
+    private async getEvaluateResult(expression: string)
+        : Promise<{success: true; value: string; variablesReference: number} | {success: false; error?: string}>
+    {
         const msg = await this.waitForMessage();
-        let result = "[error]";
-        let variableReference = 0;
         if (msg.type === "result") {
-            result = `${msg.result.value !== undefined ? msg.result.value : `[${msg.result.type}]`}`;
-            if (msg.result.type === "table") {
-                variableReference = this.variableHandles.create(expression);
-            }
+            const variablesReference = msg.result.type === "table" ? this.variableHandles.create(expression) : 0;
+            const value = `${msg.result.value !== undefined ? msg.result.value : `[${msg.result.type}]`}`;
+            return {success: true, value, variablesReference};
+
         } else if (msg.type === "error") {
-            result = `[error: ${msg.error}]`;
+            return {success: false, error: msg.error};
+
+        } else {
+            return {success: false};
         }
-        return [result, variableReference];
     }
 
     private buildVariable(variable: LuaDebug.Variable, refName: string): Variable;

@@ -487,6 +487,10 @@ namespace Send {
         if (meta !== undefined) {
             dbgProperties.metatable = {type: type(meta), value: getPrintableValue(meta)};
         }
+        const len = (tbl as unknown[]).length;
+        if (len > 0 || dbgProperties.properties.length === 0) {
+            dbgProperties.length = len;
+        }
         send(dbgProperties);
     }
 
