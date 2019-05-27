@@ -31,13 +31,22 @@ interface LuaTypeMap {
 /** @luaTable */
 declare class LuaTable<K, V> {
     public readonly length: number;
-    public get(key: K): V;
-    public set(key: K, value: V): void;
+    public get(key: K): V | undefined;
+    public set(key: K, value: V | undefined): void;
 }
+
+/** @luaIterator @tupleReturn */
+declare interface LuaTableIterable<K, V> extends Array<[K, V]> {}
+
+declare function pairs<K, V>(this: void, t: LuaTable<K, V>): LuaTableIterable<K, V>;
+declare function pairs<T extends object>(this: void, t: T): LuaPairsIterable<T>;
 
 function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val is LuaTypeMap[T] {
     return type(val) === luaTypeName;
 }
+
+const mainThreadId = 0;
+type ThreadId = LuaThread | typeof mainThreadId;
 
 namespace Path {
     export const separator = (function() {
@@ -446,6 +455,24 @@ namespace Send {
         send(dbgStack);
     }
 
+    export function threads(threadTbl: LuaTable<ThreadId, debug.FunctionInfo[]>, activeThreadId: ThreadId) {
+        const dbgThreads: LuaDebug.Threads = {
+            tag: "$luaDebug",
+            type: "threads",
+            threads: [],
+            active: 0
+        };
+        let threadIndex = 1;
+        for (const [threadId] of pairs(threadTbl)) {
+            table.insert(dbgThreads.threads, threadIndex);
+            if (threadId === activeThreadId) {
+                dbgThreads.active = threadIndex;
+            }
+            ++threadIndex;
+        }
+        send(dbgThreads);
+    }
+
     export function locals(locs: Locals) {
         const dbgVariables: LuaDebug.Variables = {
             tag: "$luaDebug",
@@ -515,6 +542,8 @@ namespace Debugger {
 
     const prompt = "";
 
+    const threads = setmetatable(new LuaTable<ThreadId, debug.FunctionInfo[]>(), {__mode: "k"});
+
     /** @tupleReturn */
     declare function load(
         this: void,
@@ -570,11 +599,25 @@ namespace Debugger {
         Send.frames(frames);
     }
 
-    function getLocals(level: number): Locals {
+    function getLocals(level: number, thread: LuaThread | undefined): Locals {
         const locs: Locals = {};
 
+        const activeThread = coroutine.running();
+        if (thread === undefined) {
+            thread = debug.getregistry().LUA_RIDX_MAINTHREAD as LuaThread | undefined;
+            if (thread === undefined && activeThread !== undefined) {
+                return locs; // Accessing locals for main thread, but we're in a coroutine right now
+            }
+        }
+
         for (let index = 1; ; ++index) {
-            const [name, val] = debug.getlocal(level + 1, index);
+            let name: string | undefined;
+            let val: unknown;
+            if (thread !== undefined) {
+                [name, val] = debug.getlocal(thread, level, index);
+            } else {
+                [name, val] = debug.getlocal(level, index);
+            }
             if (name === undefined) {
                 break;
             }
@@ -608,61 +651,73 @@ namespace Debugger {
         return globs;
     }
 
+    function getInfo(i: number, thread?: LuaThread) {
+        if (thread !== undefined) {
+            return debug.getinfo(thread, i);
+        } else {
+            return debug.getinfo(i);
+        }
+    }
+
     /** @tupleReturn */
     function execute(
         statement: string,
-        frameOffset: number,
-        frame: number,
+        level: number,
+        thread: LuaThread | undefined,
         info: debug.FunctionInfo,
-        stackLength: number
+        locs: Locals
     ): [true, unknown] | [false, string] {
-        const locs = getLocals(frameOffset + frame);
+        if (thread === undefined) {
+            thread = debug.getregistry().LUA_RIDX_MAINTHREAD as LuaThread | undefined;
+            if (thread === undefined && coroutine.running() !== undefined) {
+                return [false, `unable to execute code in main thread while running in a coroutine`];
+            }
+        }
+
         const ups = getUpvalues(info);
         const env = setmetatable(
             {},
             {
                 __index(this: unknown, name: string) {
-                    const v = locs[name] || ups[name];
-                    if (v !== undefined) {
-                        return v.val;
+                    const variable = locs[name] || ups[name];
+                    if (variable !== undefined) {
+                        return variable.val;
                     } else {
                         return _G[name];
                     }
                 },
                 __newindex(this: unknown, name: string, val: unknown) {
-                    let v = locs[name];
-                    if (v !== undefined) {
-                        let extraStack = 1;
-                        while (debug.getinfo(frameOffset + stackLength + extraStack)) {
-                            ++extraStack;
-                        }
-                        debug.setlocal(frameOffset + frame + extraStack, v.index, val);
-                        v.type = type(val);
-                        v.val = val;
-                        return;
+                    const variable = locs[name] || ups[name];
+                    if (variable !== undefined) {
+                        variable.type = type(val);
+                        variable.val = val;
+                    } else {
+                        _G[name] = val;
                     }
-
-                    v = ups[name];
-                    if (v !== undefined) {
-                        debug.setupvalue(assert(info.func), v.index, val);
-                        v.type = type(val);
-                        v.val = val;
-                        return;
-                    }
-
-                    _G[name] = val;
                 }
             }
         );
-        const [f, e] = loadCode(statement, env);
-        if (f !== undefined) {
-            return pcall(f);
-        } else {
-            return [false, e as string];
-        }
-    }
 
-    let breakAtDepth = 0;
+        const [func, err] = loadCode(statement, env);
+        if (!func) {
+            return [false, err as string];
+        }
+
+        const [success, result] = pcall(func);
+        if (success) {
+            for (const [_, loc] of pairs(locs)) {
+                if (thread) {
+                    debug.setlocal(thread, level, loc.index, loc.val);
+                } else {
+                    debug.setlocal(level, loc.index, loc.val);
+                }
+            }
+            for (const [_, up] of pairs(ups)) {
+                debug.setupvalue(assert(info.func), up.index, up.val);
+            }
+        }
+        return [success as true, result];
+    }
 
     function getInput() {
         io.write(prompt);
@@ -670,11 +725,25 @@ namespace Debugger {
         return inp;
     }
 
-    export function debugBreak(stack: debug.FunctionInfo[]) {
+    const activeThreadFrameOffset = 4;
+    const inactiveThreadFrameOffset = 1;
+    let breakAtDepth = 0;
+    let breakThreadId: ThreadId | undefined;
+
+    export function debugBreak(activeThread: LuaThread | undefined) {
+        const activeThreadId = activeThread || mainThreadId;
+        const activeStack = threads.get(activeThreadId);
+        if (activeStack === undefined) {
+            return;
+        }
+
         breakAtDepth = 0;
-        const frameOffset = 3;
+        breakThreadId = undefined;
+        let frameOffset = activeThreadFrameOffset;
         let frame = 0;
-        let info = assert(stack[frame]);
+        let currentThread = activeThread;
+        let currentStack = activeStack;
+        let info = assert(currentStack[frame]);
         while (true) {
             const inp = getInput();
             if (inp === "cont" || inp === "continue") {
@@ -703,40 +772,86 @@ namespace Debugger {
                         "break en|enable file.ext:n   : enable a breakpoint",
                         "break dis|disable file.ext:n : disable a breakpoint",
                         "break clear                  : delete all breakpoints",
+                        "threads                      : list active thread ids",
+                        "thread n                     : set current thread by id"
                     ]
                 );
 
+            } else if (inp === "threads") {
+                Send.threads(threads, activeThreadId);
+
+            } else if (inp.sub(1, 7) === "thread ") {
+                const [newThreadIdStr] = inp.match("^thread%s+(%d+)$");
+                if (newThreadIdStr !== undefined) {
+                    const newThreadIndex = assert(tonumber(newThreadIdStr));
+                    let newThreadId: ThreadId | undefined;
+                    let threadIndex = 1;
+                    for (const [threadId] of pairs(threads)) {
+                        if (threadIndex === newThreadIndex) {
+                            newThreadId = threadId;
+                            break;
+                        }
+                        ++threadIndex;
+                    }
+                    if (newThreadId !== undefined) {
+                        const newStack = threads.get(newThreadId);
+                        if (newStack !== undefined) {
+                            currentStack = newStack;
+                            currentThread = newThreadId !== mainThreadId && newThreadId || undefined;
+                            frame = 0;
+                            frameOffset = currentThread === activeThread
+                                && activeThreadFrameOffset
+                                || inactiveThreadFrameOffset;
+                            info = assert(currentStack[frame]);
+                            backtrace(currentStack, frame);
+                        } else {
+                            Send.error("Bad thread id");
+                        }
+                    } else {
+                        Send.error("Bad thread id");
+                    }
+                } else {
+                    Send.error("Bad thread id");
+                }
+
             } else if (inp === "step") {
-                breakAtDepth = stack.length;
+                breakAtDepth = activeStack.length;
+                breakThreadId = activeThreadId;
                 break;
 
             } else if (inp === "stepin") {
                 breakAtDepth = math.huge;
+                breakThreadId = activeThreadId;
                 break;
 
             } else if (inp === "stepout") {
-                breakAtDepth = stack.length - 1;
+                breakAtDepth = activeStack.length - 1;
+                breakThreadId = activeThreadId;
                 break;
 
             } else if (inp === "quit") {
                 os.exit(0);
 
             } else if (inp === "stack") {
-                backtrace(stack, frame);
+                backtrace(currentStack, frame);
 
-            } else if (inp.sub(1, 5) === "frame") {
+            } else if (inp.sub(1, 6) === "frame ") {
                 const [newFrameStr] = inp.match("^frame%s+(%d+)$");
-                const newFrame = assert(tonumber(newFrameStr));
-                if (newFrame !== undefined && newFrame > 0 && newFrame <= stack.length) {
-                    frame = newFrame - 1;
-                    info = assert(stack[frame]);
-                    backtrace(stack, frame);
+                if (newFrameStr !== undefined) {
+                    const newFrame = assert(tonumber(newFrameStr));
+                    if (newFrame !== undefined && newFrame > 0 && newFrame <= currentStack.length) {
+                        frame = newFrame - 1;
+                        info = assert(currentStack[frame]);
+                        backtrace(currentStack, frame);
+                    } else {
+                        Send.error("Bad frame");
+                    }
                 } else {
                     Send.error("Bad frame");
                 }
 
             } else if (inp === "locals") {
-                const locs = getLocals(frameOffset + frame);
+                const locs = getLocals(frame + frameOffset, currentThread);
                 Send.vars(locs);
 
             } else if (inp === "ups") {
@@ -819,7 +934,13 @@ namespace Debugger {
                     Send.error("Bad expression");
 
                 } else {
-                    const [s, r] = execute("return " + expression, frameOffset + 1, frame, info, stack.length);
+                    const [s, r] = execute(
+                        "return " + expression,
+                        frame + frameOffset,
+                        currentThread,
+                        info,
+                        getLocals(frame + frameOffset, currentThread)
+                    );
                     if (s) {
                         Send.result(r);
                     } else {
@@ -833,7 +954,13 @@ namespace Debugger {
                     Send.error("Bad expression");
 
                 } else {
-                    const [s, r] = execute("return " + expression, frameOffset + 1, frame, info, stack.length);
+                    const [s, r] = execute(
+                        "return " + expression,
+                        frame + frameOffset,
+                        currentThread,
+                        info,
+                        getLocals(frame + frameOffset, currentThread)
+                    );
                     if (s) {
                         if (isType(r, "table")) {
                             Send.props(r);
@@ -851,7 +978,13 @@ namespace Debugger {
                     Send.error("Bad statement");
 
                 } else {
-                    const [s, r] = execute(statement, frameOffset + 1, frame, info, stack.length);
+                    const [s, r] = execute(
+                        statement,
+                        frame + frameOffset,
+                        currentThread,
+                        info,
+                        getLocals(frame + frameOffset, currentThread)
+                    );
                     if (s) {
                         Send.result(r);
                     } else {
@@ -866,24 +999,25 @@ namespace Debugger {
     }
 
     export function getStack(): debug.FunctionInfo[] | undefined {
-        const info = debug.getinfo(3, "nSluf");
-        if (!info.source) {
-            return undefined;
-        }
-
-        const [isDebugger] = info.source.match("[/\\]?debugger%.lua$");
-        if (isDebugger !== undefined) {
-            return undefined;
-        }
-
-        const stack: debug.FunctionInfo[] = [info];
-        let i = 4;
+        const stack: debug.FunctionInfo[] = [];
+        let topSet = false;
+        let i = 2;
         while (true) {
             const stackInfo = debug.getinfo(i, "nSluf");
             if (stackInfo === undefined) {
                 break;
             }
-            table.insert(stack, stackInfo);
+            if (!topSet) {
+                if (stackInfo.source === undefined) {
+                    topSet = true;
+                } else {
+                    const [isDebugger] = stackInfo.source.match("debugger%.lua$");
+                    topSet = isDebugger === undefined;
+                }
+            }
+            if (topSet) {
+                table.insert(stack, stackInfo);
+            }
             ++i;
         }
         return stack;
@@ -907,13 +1041,24 @@ namespace Debugger {
             return;
         }
 
-        if (stack.length <= breakAtDepth) {
+        const thread = coroutine.running();
+
+        const threadId = thread || mainThreadId;
+        threads.set(threadId, stack);
+
+        if (stack.length <= breakAtDepth || (breakThreadId !== undefined && threadId !== breakThreadId)) {
             Send.debugBreak("step", "step");
-            debugBreak(stack);
+            debugBreak(thread);
             return;
         }
 
         const info = stack[0];
+
+        const [isDebugger] = assert(info.source).match("debugger%.lua$");
+        if (isDebugger !== undefined) {
+            return undefined;
+        }
+
         const breakpoints = Breakpoint.getAll();
         if (info.currentline === undefined || breakpoints.length === 0) {
             return;
@@ -940,7 +1085,7 @@ namespace Debugger {
                 )
             ) {
                 Send.debugBreak(`breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`, "breakpoint");
-                debugBreak(stack);
+                debugBreak(thread);
                 break;
             }
         }
@@ -948,10 +1093,26 @@ namespace Debugger {
 
     export function setHook() {
         debug.sethook(debugHook, "l");
+
+        for (const [thread] of pairs(threads)) {
+            if (thread !== 0 && coroutine.status(thread) !== "dead") {
+                debug.sethook(thread, debugHook, "l");
+            }
+        }
     }
 
     export function clearHook() {
         debug.sethook();
+
+        for (const [thread] of pairs(threads)) {
+            if (thread !== 0 && coroutine.status(thread) !== "dead") {
+                debug.sethook(
+                    thread,
+                    undefined as unknown as debug.Hook,
+                    undefined as unknown as string
+                );
+            }
+        }
     }
 
     export function triggerBreak() {
@@ -977,6 +1138,36 @@ namespace Debugger {
         }
         return result;
     }
+
+    //Track coroutines
+    const luaCoroutineCreate = coroutine.create;
+    coroutine.create = (f: Function) => {
+        const thread = luaCoroutineCreate(f);
+        threads.set(thread, []);
+        if (debug.gethook()) {
+            debug.sethook(thread, debugHook, "l");
+        }
+        return thread;
+    };
+
+    //Override debug.traceback
+    const luaDebugTraceback = debug.traceback;
+    debug.traceback = (
+        threadOrMessage?: LuaThread | string,
+        messageOrLevel?: string | number,
+        level?: number
+    ): string => {
+        let trace = luaDebugTraceback(threadOrMessage as LuaThread, messageOrLevel as string, level as number);
+        if (trace) {
+            trace = Debugger.mapSources(trace);
+        }
+
+        const thread = isType(threadOrMessage, "thread") && threadOrMessage || undefined;
+        Send.debugBreak(trace || "error", "error");
+        Debugger.debugBreak(thread);
+
+        return trace;
+    };
 }
 
 //Trigger a break at next executed line
@@ -1008,29 +1199,13 @@ export function start(entryPoint?: string | { (this: void): void }, breakImmedia
                 stop();
             },
             err => {
-                const stack = Debugger.getStack() || [];
                 err = Debugger.mapSources(tostring(err));
                 Send.debugBreak(err, "error");
-                Debugger.debugBreak(stack);
+                Debugger.debugBreak(coroutine.running());
             }
         );
     }
 }
-
-//Override debug.traceback
-const luaDebugTraceback = debug.traceback;
-debug.traceback = (threadOrMessage?: LuaThread | string, messageOrLevel?: string | number, level?: number): string => {
-    let trace = luaDebugTraceback(threadOrMessage as LuaThread, messageOrLevel as string, level as number);
-    if (trace) {
-        trace = Debugger.mapSources(trace);
-    }
-
-    const stack = Debugger.getStack() || [];
-    Send.debugBreak(trace || "error", "error");
-    Debugger.debugBreak(stack);
-
-    return trace;
-};
 
 //Don't buffer io
 io.stdout.setvbuf("no");

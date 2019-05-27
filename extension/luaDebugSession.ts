@@ -24,6 +24,27 @@ interface MessageHandler<T extends LuaDebug.Message = LuaDebug.Message> {
     (msg: T): void;
 }
 
+const enum ScopeType {
+    Local = 1,
+    Upvalue,
+    Global
+}
+
+const enum OutputCategory {
+    StdOut = "stdout",
+    StdErr = "stderr",
+    Command = "command",
+    Request = "request",
+    Message = "message",
+    Info = "info",
+    Error = "error"
+}
+
+const mainThreadId = 1;
+const maxStackCount = 100;
+const metatableDisplayName = "[[metatable]]";
+const tableLengthDisplayName = "[[length]]";
+
 function getEnvKey(env: NodeJS.ProcessEnv, searchKey: string) {
     const upperSearchKey = searchKey.toUpperCase();
     for (const key in env) {
@@ -70,25 +91,13 @@ function sortVariables(a: Variable, b: Variable): number {
     }
 }
 
-const enum ScopeType {
-    Local = 1,
-    Upvalue,
-    Global
+function parseFrameId(frameId: number) {
+    return {threadId: Math.floor(frameId / maxStackCount) + 1, frame: frameId % maxStackCount + 1};
 }
 
-const enum OutputCategory {
-    StdOut = "stdout",
-    StdErr = "stderr",
-    Command = "command",
-    Request = "request",
-    Message = "message",
-    Info = "info",
-    Error = "error"
+function makeFrameId(threadId: number, frame: number) {
+    return (threadId - 1) * maxStackCount + (frame - 1);
 }
-
-const mainThreadId = 1;
-const metatableDisplayName = "[[metatable]]";
-const tableLengthDisplayName = "[[length]]";
 
 export class LuaDebugSession extends LoggingDebugSession {
     private readonly fileBreakpointLines: { [file: string]: number[] } = {};
@@ -241,9 +250,18 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    protected threadsRequest(response: DebugProtocol.ThreadsResponse): void {
+    protected async threadsRequest(response: DebugProtocol.ThreadsResponse) {
         this.showOutput(`threadsRequest`, OutputCategory.Request);
-        response.body = {threads: [new Thread(mainThreadId, "main thread")]};
+
+        this.sendCommand("threads");
+        const msg = await this.waitForMessage();
+
+        if (msg.type === "threads") {
+            response.body = {threads: msg.threads.map(threadId => new Thread(threadId, `Thread ${threadId}`))};
+        } else {
+            response.body = {threads: [new Thread(mainThreadId, "main thread")]};
+        }
+
         this.sendResponse(response);
     }
 
@@ -253,12 +271,11 @@ export class LuaDebugSession extends LoggingDebugSession {
     ) {
         this.showOutput(`stackTraceRequest ${args.startFrame}/${args.levels}`, OutputCategory.Request);
 
-        this.sendCommand("stack");
-
+        this.sendCommand(`thread ${args.threadId}`);
         const msg = await this.waitForMessage();
 
         const startFrame = args.startFrame !== undefined ? args.startFrame : 0;
-        const maxLevels = args.levels !== undefined ? args.levels : 100;
+        const maxLevels = args.levels !== undefined ? args.levels : maxStackCount;
         if (msg.type === "stack") {
             const frames: StackFrame[] = [];
             const endFrame = Math.min(startFrame + maxLevels, msg.frames.length);
@@ -290,7 +307,10 @@ export class LuaDebugSession extends LoggingDebugSession {
                     source = new Source(path.basename(sourcePath), sourcePath);
                     line = frame.line;
                 }
-                frames.push(new StackFrame(i, frame.func !== undefined ? frame.func : "???", source, line, column));
+                const frameId = makeFrameId(args.threadId, i + 1);
+                frames.push(
+                    new StackFrame(frameId, frame.func !== undefined ? frame.func : "???", source, line, column)
+                );
             }
             response.body = {stackFrames: frames, totalFrames: msg.frames.length};
 
@@ -300,10 +320,15 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    protected scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments): void {
+    protected async scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments) {
         this.showOutput(`scopesRequest`, OutputCategory.Request);
 
-        this.sendCommand(`frame ${args.frameId + 1}`);
+        const {threadId, frame} = parseFrameId(args.frameId);
+        this.sendCommand(`thread ${threadId}`);
+        await this.waitForMessage();
+
+        this.sendCommand(`frame ${frame}`);
+        await this.waitForMessage();
 
         const scopes: Scope[] = [
             new Scope("Local", ScopeType.Local, false),
@@ -449,6 +474,16 @@ export class LuaDebugSession extends LoggingDebugSession {
         const expression = args.expression;
         this.showOutput(`evaluateRequest ${expression}`, OutputCategory.Request);
 
+        if (args.frameId !== undefined) {
+            const {threadId, frame} = parseFrameId(args.frameId);
+
+            this.sendCommand(`thread ${threadId}`);
+            await this.waitForMessage();
+
+            this.sendCommand(`frame ${frame}`);
+            await this.waitForMessage();
+        }
+
         this.sendCommand(`eval ${expression}`);
 
         const result = await this.getEvaluateResult(expression);
@@ -552,7 +587,14 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         if (msg.breakType === "error") {
             this.showOutput(msg.message, OutputCategory.Error);
-            this.sendEvent(new StoppedEvent("exception", mainThreadId, msg.message));
+
+            this.sendCommand("threads");
+            const threadsMsg = await this.waitForMessage();
+            const threadId = threadsMsg.type === "threads" ? threadsMsg.active : mainThreadId;
+
+            const evt: DebugProtocol.StoppedEvent = new StoppedEvent("exception", threadId, msg.message);
+            evt.body.allThreadsStopped = true;
+            this.sendEvent(evt);
             return;
         }
 
@@ -561,7 +603,13 @@ export class LuaDebugSession extends LoggingDebugSession {
             this.sendCommand("cont");
 
         } else {
-            this.sendEvent(new StoppedEvent("breakpoint", mainThreadId));
+            this.sendCommand("threads");
+            const threadsMsg = await this.waitForMessage();
+            const threadId = threadsMsg.type === "threads" ? threadsMsg.active : mainThreadId;
+
+            const evt: DebugProtocol.StoppedEvent = new StoppedEvent("breakpoint", threadId);
+            evt.body.allThreadsStopped = true;
+            this.sendEvent(evt);
         }
     }
 
@@ -624,14 +672,14 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (category === OutputCategory.StdOut || category === OutputCategory.StdErr) {
             msg = msg.trim();
             if (msg.length > 0) {
-                this.sendEvent(new OutputEvent(`${msg}`, category));
+                this.sendEvent(new OutputEvent(`${msg}\n`, category));
             }
 
         } else if (category === OutputCategory.Error) {
-            this.sendEvent(new OutputEvent(`[${category}] ${msg}`, "stderr"));
+            this.sendEvent(new OutputEvent(`[${category}] ${msg}\n`, "stderr"));
 
         } else if (this.config !== undefined && this.config.verbose === true) {
-            this.sendEvent(new OutputEvent(`[${category}] ${msg}`));
+            this.sendEvent(new OutputEvent(`[${category}] ${msg}\n`));
         }
     }
 

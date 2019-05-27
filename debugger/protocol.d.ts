@@ -72,5 +72,11 @@ declare namespace LuaDebug {
         breakpoints: Breakpoint[];
     }
 
-    type Message = Error | DebugBreak | Result | Stack | Variables | Properties | Breakpoints;
+    interface Threads extends MessageBase {
+        type: "threads",
+        threads: number[];
+        active: number;
+    }
+
+    type Message = Error | DebugBreak | Result | Stack | Variables | Properties | Breakpoints | Threads;
 }
