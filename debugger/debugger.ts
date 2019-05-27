@@ -50,7 +50,7 @@ type ThreadId = LuaThread | typeof mainThreadId;
 
 namespace Path {
     export const separator = (function() {
-        const config = (_G as Record<"package", Record<"config", string>>).package.config;
+        const config = (_G.package as typeof _G["package"] & Record<"config", string>).config;
         if (config) {
             const [sep] = config.match("^[^\n]+");
             if (sep) {
