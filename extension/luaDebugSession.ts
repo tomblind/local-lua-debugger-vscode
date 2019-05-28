@@ -257,7 +257,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         const msg = await this.waitForMessage();
 
         if (msg.type === "threads") {
-            response.body = {threads: msg.threads.map(threadId => new Thread(threadId, `Thread ${threadId}`))};
+            response.body = {threads: msg.threads.map(({id, name}) => new Thread(id, name))};
         } else {
             response.body = {threads: [new Thread(mainThreadId, "main thread")]};
         }
@@ -590,7 +590,10 @@ export class LuaDebugSession extends LoggingDebugSession {
 
             this.sendCommand("threads");
             const threadsMsg = await this.waitForMessage();
-            const threadId = threadsMsg.type === "threads" ? threadsMsg.active : mainThreadId;
+
+            const threadId = threadsMsg.type === "threads"
+                ? this.assert(threadsMsg.threads.find(t => t.active === true)).id
+                : mainThreadId;
 
             const evt: DebugProtocol.StoppedEvent = new StoppedEvent("exception", threadId, msg.message);
             evt.body.allThreadsStopped = true;
@@ -605,7 +608,10 @@ export class LuaDebugSession extends LoggingDebugSession {
         } else {
             this.sendCommand("threads");
             const threadsMsg = await this.waitForMessage();
-            const threadId = threadsMsg.type === "threads" ? threadsMsg.active : mainThreadId;
+
+            const threadId = threadsMsg.type === "threads"
+                ? this.assert(threadsMsg.threads.find(t => t.active === true)).id
+                : mainThreadId;
 
             const evt: DebugProtocol.StoppedEvent = new StoppedEvent("breakpoint", threadId);
             evt.body.allThreadsStopped = true;

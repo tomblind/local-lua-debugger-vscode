@@ -45,8 +45,8 @@ function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val i
     return type(val) === luaTypeName;
 }
 
-const mainThreadId = 0;
-type ThreadId = LuaThread | typeof mainThreadId;
+const mainThread = (debug.getregistry().LUA_RIDX_MAINTHREAD as LuaThread | undefined) || "main thread";
+type Thread = LuaThread | typeof mainThread;
 
 namespace Path {
     export const separator = (function() {
@@ -455,20 +455,19 @@ namespace Send {
         send(dbgStack);
     }
 
-    export function threads(threadTbl: LuaTable<ThreadId, debug.FunctionInfo[]>, activeThreadId: ThreadId) {
+    export function threads(threadIds: LuaTable<Thread, number>, activeThread: Thread) {
         const dbgThreads: LuaDebug.Threads = {
             tag: "$luaDebug",
             type: "threads",
-            threads: [],
-            active: 0
+            threads: []
         };
-        let threadIndex = 1;
-        for (const [threadId] of pairs(threadTbl)) {
-            table.insert(dbgThreads.threads, threadIndex);
-            if (threadId === activeThreadId) {
-                dbgThreads.active = threadIndex;
-            }
-            ++threadIndex;
+        for (const [thread, threadId] of pairs(threadIds)) {
+            const dbgThread: LuaDebug.Thread = {
+                name: tostring(thread),
+                id: threadId,
+                active: thread === activeThread || undefined
+            };
+            table.insert(dbgThreads.threads, dbgThread);
         }
         send(dbgThreads);
     }
@@ -542,7 +541,13 @@ namespace Debugger {
 
     const prompt = "";
 
-    const threads = setmetatable(new LuaTable<ThreadId, debug.FunctionInfo[]>(), {__mode: "k"});
+    const threadStacks = setmetatable(new LuaTable<Thread, debug.FunctionInfo[]>(), {__mode: "k"});
+    const threadIds = setmetatable(new LuaTable<Thread, number>(), {__mode: "k"});
+
+    const mainThreadId = 1;
+    threadIds.set(mainThread, mainThreadId);
+
+    let nextThreadId = mainThreadId + 1;
 
     /** @tupleReturn */
     declare function load(
@@ -599,21 +604,17 @@ namespace Debugger {
         Send.frames(frames);
     }
 
-    function getLocals(level: number, thread: LuaThread | undefined): Locals {
+    function getLocals(level: number, thread: Thread): Locals {
         const locs: Locals = {};
 
-        const activeThread = coroutine.running();
-        if (thread === undefined) {
-            thread = debug.getregistry().LUA_RIDX_MAINTHREAD as LuaThread | undefined;
-            if (thread === undefined && activeThread !== undefined) {
-                return locs; // Accessing locals for main thread, but we're in a coroutine right now
-            }
+        if (coroutine.running() !== undefined && !isType(thread, "thread")) {
+            return locs; // Accessing locals for main thread, but we're in a coroutine right now
         }
 
         for (let index = 1; ; ++index) {
             let name: string | undefined;
             let val: unknown;
-            if (thread !== undefined) {
+            if (isType(thread, "thread")) {
                 [name, val] = debug.getlocal(thread, level, index);
             } else {
                 [name, val] = debug.getlocal(level, index);
@@ -651,27 +652,16 @@ namespace Debugger {
         return globs;
     }
 
-    function getInfo(i: number, thread?: LuaThread) {
-        if (thread !== undefined) {
-            return debug.getinfo(thread, i);
-        } else {
-            return debug.getinfo(i);
-        }
-    }
-
     /** @tupleReturn */
     function execute(
         statement: string,
         level: number,
-        thread: LuaThread | undefined,
+        thread: Thread,
         info: debug.FunctionInfo,
         locs: Locals
     ): [true, unknown] | [false, string] {
-        if (thread === undefined) {
-            thread = debug.getregistry().LUA_RIDX_MAINTHREAD as LuaThread | undefined;
-            if (thread === undefined && coroutine.running() !== undefined) {
-                return [false, `unable to execute code in main thread while running in a coroutine`];
-            }
+        if (coroutine.running() !== undefined && !isType(thread, "thread")) {
+            return [false, `unable to execute code in main thread while running in a coroutine`];
         }
 
         const ups = getUpvalues(info);
@@ -706,7 +696,7 @@ namespace Debugger {
         const [success, result] = pcall(func);
         if (success) {
             for (const [_, loc] of pairs(locs)) {
-                if (thread) {
+                if (isType(thread, "thread")) {
                     debug.setlocal(thread, level, loc.index, loc.val);
                 } else {
                     debug.setlocal(level, loc.index, loc.val);
@@ -728,17 +718,16 @@ namespace Debugger {
     const activeThreadFrameOffset = 4;
     const inactiveThreadFrameOffset = 1;
     let breakAtDepth = 0;
-    let breakThreadId: ThreadId | undefined;
+    let breakThread: Thread | undefined;
 
-    export function debugBreak(activeThread: LuaThread | undefined) {
-        const activeThreadId = activeThread || mainThreadId;
-        const activeStack = threads.get(activeThreadId);
+    export function debugBreak(activeThread: Thread) {
+        const activeStack = threadStacks.get(activeThread);
         if (activeStack === undefined) {
             return;
         }
 
         breakAtDepth = 0;
-        breakThreadId = undefined;
+        breakThread = undefined;
         let frameOffset = activeThreadFrameOffset;
         let frame = 0;
         let currentThread = activeThread;
@@ -778,26 +767,24 @@ namespace Debugger {
                 );
 
             } else if (inp === "threads") {
-                Send.threads(threads, activeThreadId);
+                Send.threads(threadIds, activeThread);
 
             } else if (inp.sub(1, 7) === "thread ") {
                 const [newThreadIdStr] = inp.match("^thread%s+(%d+)$");
                 if (newThreadIdStr !== undefined) {
-                    const newThreadIndex = assert(tonumber(newThreadIdStr));
-                    let newThreadId: ThreadId | undefined;
-                    let threadIndex = 1;
-                    for (const [threadId] of pairs(threads)) {
-                        if (threadIndex === newThreadIndex) {
-                            newThreadId = threadId;
+                    const newThreadId = assert(tonumber(newThreadIdStr));
+                    let newThread: Thread | undefined;
+                    for (const [thread, threadId] of pairs(threadIds)) {
+                        if (threadId === newThreadId) {
+                            newThread = thread;
                             break;
                         }
-                        ++threadIndex;
                     }
-                    if (newThreadId !== undefined) {
-                        const newStack = threads.get(newThreadId);
+                    if (newThread !== undefined) {
+                        const newStack = threadStacks.get(newThread);
                         if (newStack !== undefined) {
                             currentStack = newStack;
-                            currentThread = newThreadId !== mainThreadId && newThreadId || undefined;
+                            currentThread = newThread;
                             frame = 0;
                             frameOffset = currentThread === activeThread
                                 && activeThreadFrameOffset
@@ -816,17 +803,17 @@ namespace Debugger {
 
             } else if (inp === "step") {
                 breakAtDepth = activeStack.length;
-                breakThreadId = activeThreadId;
+                breakThread = activeThread;
                 break;
 
             } else if (inp === "stepin") {
                 breakAtDepth = math.huge;
-                breakThreadId = activeThreadId;
+                breakThread = activeThread;
                 break;
 
             } else if (inp === "stepout") {
                 breakAtDepth = activeStack.length - 1;
-                breakThreadId = activeThreadId;
+                breakThread = activeThread;
                 break;
 
             } else if (inp === "quit") {
@@ -1041,12 +1028,10 @@ namespace Debugger {
             return;
         }
 
-        const thread = coroutine.running();
+        const thread = coroutine.running() || mainThread;
+        threadStacks.set(thread, stack);
 
-        const threadId = thread || mainThreadId;
-        threads.set(threadId, stack);
-
-        if (stack.length <= breakAtDepth || (breakThreadId !== undefined && threadId !== breakThreadId)) {
+        if (stack.length <= breakAtDepth || (breakThread !== undefined && thread !== breakThread)) {
             Send.debugBreak("step", "step");
             debugBreak(thread);
             return;
@@ -1094,8 +1079,8 @@ namespace Debugger {
     export function setHook() {
         debug.sethook(debugHook, "l");
 
-        for (const [thread] of pairs(threads)) {
-            if (thread !== 0 && coroutine.status(thread) !== "dead") {
+        for (const [thread] of pairs(threadStacks)) {
+            if (isType(thread, "thread") && coroutine.status(thread) !== "dead") {
                 debug.sethook(thread, debugHook, "l");
             }
         }
@@ -1104,13 +1089,9 @@ namespace Debugger {
     export function clearHook() {
         debug.sethook();
 
-        for (const [thread] of pairs(threads)) {
-            if (thread !== 0 && coroutine.status(thread) !== "dead") {
-                debug.sethook(
-                    thread,
-                    undefined as unknown as debug.Hook,
-                    undefined as unknown as string
-                );
+        for (const [thread] of pairs(threadStacks)) {
+            if (isType(thread, "thread") && coroutine.status(thread) !== "dead") {
+                debug.sethook(thread);
             }
         }
     }
@@ -1143,7 +1124,9 @@ namespace Debugger {
     const luaCoroutineCreate = coroutine.create;
     coroutine.create = (f: Function) => {
         const thread = luaCoroutineCreate(f);
-        threads.set(thread, []);
+        threadStacks.set(thread, []);
+        threadIds.set(thread, nextThreadId);
+        ++nextThreadId;
         if (debug.gethook()) {
             debug.sethook(thread, debugHook, "l");
         }
@@ -1162,7 +1145,7 @@ namespace Debugger {
             trace = Debugger.mapSources(trace);
         }
 
-        const thread = isType(threadOrMessage, "thread") && threadOrMessage || undefined;
+        const thread = isType(threadOrMessage, "thread") && threadOrMessage || coroutine.running() || mainThread;
         Send.debugBreak(trace || "error", "error");
         Debugger.debugBreak(thread);
 
@@ -1201,7 +1184,7 @@ export function start(entryPoint?: string | { (this: void): void }, breakImmedia
             err => {
                 err = Debugger.mapSources(tostring(err));
                 Send.debugBreak(err, "error");
-                Debugger.debugBreak(coroutine.running());
+                Debugger.debugBreak(coroutine.running() || mainThread);
             }
         );
     }
