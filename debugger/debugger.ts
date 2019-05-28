@@ -45,7 +45,9 @@ function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val i
     return type(val) === luaTypeName;
 }
 
-const mainThread = (debug.getregistry().LUA_RIDX_MAINTHREAD as LuaThread | undefined) || "main thread";
+const LUA_RIDX_MAINTHREAD = 1;
+const mainThreadName = "main thread" as const;
+const mainThread = (debug.getregistry()[LUA_RIDX_MAINTHREAD] as LuaThread | undefined) || mainThreadName;
 type Thread = LuaThread | typeof mainThread;
 
 namespace Path {
@@ -463,7 +465,7 @@ namespace Send {
         };
         for (const [thread, threadId] of pairs(threadIds)) {
             const dbgThread: LuaDebug.Thread = {
-                name: tostring(thread),
+                name: thread === mainThread && mainThreadName || tostring(thread),
                 id: threadId,
                 active: thread === activeThread || undefined
             };
