@@ -7,7 +7,8 @@
 		"build-debugger": "tstl -p debugger",
 		"build-extension": "tsc -p extension",
 		"build": "npm run build-debugger && npm run build-extension",
-		"clean:win": "if exist out rmdir /S /Q out"
+		"clean:win": "if exist out rmdir /S /Q out",
+		"clean:bash": "rm -rf out"
 	},
 	"author": "tomb@noreply.github.com",
 	"license": "MIT",

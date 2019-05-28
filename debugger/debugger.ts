@@ -718,7 +718,7 @@ namespace Debugger {
     const activeThreadFrameOffset = 4;
     const inactiveThreadFrameOffset = 1;
     let breakAtDepth = 0;
-    let breakThread: Thread | undefined;
+    let breakInThread: Thread | undefined;
 
     export function debugBreak(activeThread: Thread) {
         const activeStack = threadStacks.get(activeThread);
@@ -727,7 +727,7 @@ namespace Debugger {
         }
 
         breakAtDepth = 0;
-        breakThread = undefined;
+        breakInThread = undefined;
         let frameOffset = activeThreadFrameOffset;
         let frame = 0;
         let currentThread = activeThread;
@@ -803,17 +803,17 @@ namespace Debugger {
 
             } else if (inp === "step") {
                 breakAtDepth = activeStack.length;
-                breakThread = activeThread;
+                breakInThread = activeThread;
                 break;
 
             } else if (inp === "stepin") {
                 breakAtDepth = math.huge;
-                breakThread = activeThread;
+                breakInThread = activeThread;
                 break;
 
             } else if (inp === "stepout") {
                 breakAtDepth = activeStack.length - 1;
-                breakThread = activeThread;
+                breakInThread = activeThread;
                 break;
 
             } else if (inp === "quit") {
@@ -1031,7 +1031,7 @@ namespace Debugger {
         const thread = coroutine.running() || mainThread;
         threadStacks.set(thread, stack);
 
-        if (stack.length <= breakAtDepth || (breakThread !== undefined && thread !== breakThread)) {
+        if (stack.length <= breakAtDepth && (breakInThread === undefined || thread === breakInThread)) {
             Send.debugBreak("step", "step");
             debugBreak(thread);
             return;

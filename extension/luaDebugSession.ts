@@ -222,32 +222,32 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`setBreakPointsRequest`, OutputCategory.Request);
 
         const filePath = args.source.path as string;
-
-        let newLines = args.breakpoints !== undefined ? args.breakpoints.map(bp => bp.line) : [];
+        const setLines = args.breakpoints !== undefined ? args.breakpoints.map(bp => bp.line) : [];
 
         if (this.process !== undefined) {
-            let oldLines = this.fileBreakpointLines[filePath];
+            const oldLines = this.fileBreakpointLines[filePath];
             if (oldLines !== undefined) {
-                const filteredNewLines = newLines.filter(l => oldLines.indexOf(l) === -1);
-                oldLines = oldLines.filter(l => newLines.indexOf(l) === -1);
-                newLines = filteredNewLines;
                 for (const line of oldLines) {
-                    this.sendCommand(`break delete ${filePath}:${line}`);
-                    await this.waitForMessage();
+                    if (!setLines.some(l => l === line)) {
+                        this.sendCommand(`break delete ${filePath}:${line}`);
+                        await this.waitForMessage();
+                    }
                 }
             }
 
-            for (const line of newLines) {
-                this.sendCommand(`break set ${filePath}:${line}`);
-                await this.waitForMessage();
+            for (const line of setLines) {
+                if (oldLines === undefined || !oldLines.some(l => l === line)) {
+                    this.sendCommand(`break set ${filePath}:${line}`);
+                    await this.waitForMessage();
+                }
             }
         } else {
             this.breakpointsPending = true;
         }
 
-        this.fileBreakpointLines[filePath] = newLines;
+        this.fileBreakpointLines[filePath] = setLines;
 
-        const breakpoints: Breakpoint[] = this.fileBreakpointLines[filePath].map(line => new Breakpoint(true, line));
+        const breakpoints: Breakpoint[] = setLines.map(line => new Breakpoint(true, line));
         response.body = {breakpoints};
         this.sendResponse(response);
     }
