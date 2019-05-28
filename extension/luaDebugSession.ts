@@ -12,7 +12,8 @@ import {
     TerminatedEvent,
     StoppedEvent,
     Variable,
-    Handles
+    Handles,
+    ThreadEvent
 } from "vscode-debugadapter";
 import * as child_process from "child_process";
 import * as path from "path";
@@ -109,6 +110,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private readonly variableHandles = new Handles<string>(ScopeType.Global + 1);
     private breakpointsPending = false;
     private autoContinueNext = false;
+    private activeThreads = new Map<number, Thread>();
 
     public constructor() {
         super("lldv-log.txt");
@@ -257,7 +259,23 @@ export class LuaDebugSession extends LoggingDebugSession {
         const msg = await this.waitForMessage();
 
         if (msg.type === "threads") {
-            response.body = {threads: msg.threads.map(({id, name}) => new Thread(id, name))};
+            //Remove dead threads
+            const activeThreadIds = [...this.activeThreads.keys()];
+            for (const activeId of activeThreadIds) {
+                if (!msg.threads.some(({id}) => activeId === id)) {
+                    this.sendEvent(new ThreadEvent("exited", activeId));
+                    this.activeThreads.delete(activeId);
+                }
+            }
+
+            //Create new threads
+            const newThreads = msg.threads.filter(({id}) => !this.activeThreads.has(id));
+            for (const {id, name} of newThreads) {
+                this.activeThreads.set(id, new Thread(id, name));
+            }
+
+            response.body = {threads: [...this.activeThreads.values()]};
+
         } else {
             response.body = {threads: [new Thread(mainThreadId, "main thread")]};
         }
