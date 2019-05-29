@@ -556,6 +556,7 @@ namespace Debugger {
 
     let nextThreadId = mainThreadId + 1;
 
+    // For Lua 5.2+
     /** @tupleReturn */
     declare function load(
         this: void,
@@ -722,16 +723,15 @@ namespace Debugger {
         return inp;
     }
 
-    const activeThreadFrameOffset = 4;
-    const inactiveThreadFrameOffset = 1;
     let breakAtDepth = 0;
     let breakInThread: Thread | undefined;
 
-    export function debugBreak(activeThread: Thread) {
-        const activeStack = threadStacks.get(activeThread);
-        if (!activeStack) {
-            return;
-        }
+    export function debugBreak(activeThread: Thread, stackOffset: number) {
+        ++stackOffset;
+        const activeStack = Debugger.updateActiveStack(activeThread, stackOffset);
+
+        const activeThreadFrameOffset = stackOffset + 1;
+        const inactiveThreadFrameOffset = 1;
 
         breakAtDepth = 0;
         breakInThread = undefined;
@@ -992,29 +992,19 @@ namespace Debugger {
         }
     }
 
-    export function getStack(): debug.FunctionInfo[] | undefined {
-        const stack: debug.FunctionInfo[] = [];
-        let topSet = false;
-        let i = 2;
+    export function updateActiveStack(activeThread: Thread, offset: number) {
+        const activeStack: debug.FunctionInfo[] = [];
+        let i = offset + 1;
         while (true) {
             const stackInfo = debug.getinfo(i, "nSluf");
             if (!stackInfo) {
                 break;
             }
-            if (!topSet) {
-                if (!stackInfo.source) {
-                    topSet = true;
-                } else {
-                    const [isDebugger] = stackInfo.source.match("debugger%.lua$");
-                    topSet = isDebugger === undefined;
-                }
-            }
-            if (topSet) {
-                table.insert(stack, stackInfo);
-            }
+            table.insert(activeStack, stackInfo);
             ++i;
         }
-        return stack;
+        threadStacks.set(activeThread, activeStack);
+        return activeStack;
     }
 
     function comparePaths(a: string, b: string) {
@@ -1030,45 +1020,43 @@ namespace Debugger {
     }
 
     function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
-        const stack = getStack();
-        if (!stack) {
+        const stackOffset = 2;
+
+        //Ignore debugger code
+        const topFrame = debug.getinfo(stackOffset, "nSluf");
+        if (!topFrame || !topFrame.source || topFrame.source.sub(-12) === "debugger.lua") {
             return;
         }
 
-        const thread = coroutine.running() || mainThread;
-        threadStacks.set(thread, stack);
+        const activeThread = coroutine.running() || mainThread;
+        const activeStack = updateActiveStack(activeThread, stackOffset);
 
-        if (stack.length <= breakAtDepth && (!breakInThread || thread === breakInThread)) {
+        //Stepping
+        if (activeStack.length <= breakAtDepth && (!breakInThread || activeThread === breakInThread)) {
             Send.debugBreak("step", "step");
-            debugBreak(thread);
+            debugBreak(activeThread, stackOffset);
             return;
         }
 
-        const info = stack[0];
-
-        const [isDebugger] = assert(info.source).match("debugger%.lua$");
-        if (isDebugger !== undefined) {
-            return undefined;
-        }
-
+        //Breakpoints
         const breakpoints = Breakpoint.getAll();
-        if (!info.currentline || breakpoints.length === 0) {
+        if (!topFrame.currentline || breakpoints.length === 0) {
             return;
         }
 
-        const source = Path.format(assert(info.source));
+        const source = Path.format(assert(topFrame.source));
         const sourceMap = SourceMap.get(source);
         let sourceMapFile: string | undefined;
         let lineMapping: SourceLineMapping | undefined;
         if (sourceMap) {
-            lineMapping = sourceMap[info.currentline];
+            lineMapping = sourceMap[topFrame.currentline];
             if (lineMapping) {
                 sourceMapFile = sourceMap.sources[lineMapping.sourceIndex];
             }
         }
         for (const [_, breakpoint] of ipairs(breakpoints)) {
             if (breakpoint.enabled
-                && ((breakpoint.line === info.currentline && comparePaths(breakpoint.file, source))
+                && ((breakpoint.line === topFrame.currentline && comparePaths(breakpoint.file, source))
                     || (lineMapping
                         && sourceMapFile
                         && breakpoint.line === lineMapping.sourceLine
@@ -1077,7 +1065,7 @@ namespace Debugger {
                 )
             ) {
                 Send.debugBreak(`breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`, "breakpoint");
-                debugBreak(thread);
+                debugBreak(activeThread, stackOffset);
                 break;
             }
         }
@@ -1157,7 +1145,7 @@ namespace Debugger {
 
         const thread = isType(threadOrMessage, "thread") && threadOrMessage || coroutine.running() || mainThread;
         Send.debugBreak(trace || "error", "error");
-        Debugger.debugBreak(thread);
+        Debugger.debugBreak(thread, 3);
 
         return trace;
     };
@@ -1194,7 +1182,7 @@ export function start(entryPoint?: string | { (this: void): void }, breakImmedia
             err => {
                 err = Debugger.mapSources(tostring(err));
                 Send.debugBreak(err, "error");
-                Debugger.debugBreak(coroutine.running() || mainThread);
+                Debugger.debugBreak(coroutine.running() || mainThread, 2);
             }
         );
     }
