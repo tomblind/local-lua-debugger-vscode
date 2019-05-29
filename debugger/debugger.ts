@@ -45,10 +45,15 @@ function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val i
     return type(val) === luaTypeName;
 }
 
-const LUA_RIDX_MAINTHREAD = 1;
+type Thread = LuaThread | typeof mainThreadName;
+
 const mainThreadName = "main thread" as const;
-const mainThread = (debug.getregistry()[LUA_RIDX_MAINTHREAD] as LuaThread | undefined) || mainThreadName;
-type Thread = LuaThread | typeof mainThread;
+let mainThread: Thread;
+{
+    const LUA_RIDX_MAINTHREAD = 1;
+    const registryMainThread = debug.getregistry()[LUA_RIDX_MAINTHREAD];
+    mainThread = isType(registryMainThread, "thread") && registryMainThread || mainThreadName;
+}
 
 namespace Path {
     export const separator = (function() {
@@ -65,7 +70,7 @@ namespace Path {
     let cwd: string | undefined;
 
     export function getCwd() {
-        if (cwd === undefined) {
+        if (!cwd) {
             const [p] = io.popen(separator === "\\" && "cd" || "pwd");
             cwd = p && p.read("*a") || "";
         }
@@ -75,7 +80,7 @@ namespace Path {
     /** @tupleReturn */
     export function splitDrive(path: string) {
         let [drive, pathPart] = path.match(`^[@=]?([a-zA-Z]:[\\/])(.*)`);
-        if (drive !== undefined) {
+        if (drive) {
             drive = drive.upper();
         } else {
             [drive, pathPart] = path.match(`^[@=]?([\\/]*)(.*)`);
@@ -161,7 +166,7 @@ interface SourceLineMapping {
 }
 
 interface SourceMap {
-    [line: number]: SourceLineMapping;
+    [line: number]: SourceLineMapping | undefined;
     sources: string[];
 }
 
@@ -239,7 +244,7 @@ namespace SourceMap
         const [sources] = data.match('"sources"%s*:%s*(%b[])');
         const [mappings] = data.match('"mappings"%s*:%s*"([^"]+)"');
         const [sourceRoot] = data.match('"sourceRoot"%s*:%s*"([^"]+)"');
-        if (mappings === undefined || sources === undefined) {
+        if (!mappings || !sources) {
             return undefined;
         }
 
@@ -263,7 +268,7 @@ namespace SourceMap
             sourceColumn += (sourceColOffset || 0);
 
             const lineMapping = sourceMap[line];
-            if (lineMapping === undefined
+            if (!lineMapping
                 || sourceLine < lineMapping.sourceLine
                 || (sourceLine === lineMapping.sourceLine && sourceColumn < lineMapping.sourceColumn)
             ) {
@@ -300,7 +305,7 @@ namespace SourceMap
             //Look for map file
             const mapFile = file + ".map";
             let [f] = io.open(mapFile);
-            if (f !== undefined) {
+            if (f) {
                 const data = f.read("*a");
                 f.close();
                 sourceMap = build(data) || false;
@@ -308,13 +313,13 @@ namespace SourceMap
             //Look for inline map
             } else {
                 [f] = io.open(file);
-                if (f !== undefined) {
+                if (f) {
                     const data = f.read("*a");
                     f.close();
                     const [encodedMap] = data.match(
                         "--# sourceMappingURL=data:application/json;base64,([A-Za-z0-9+/=]+)%s*$"
                     );
-                    if (encodedMap !== undefined) {
+                    if (encodedMap) {
                         const map = base64Decode(encodedMap);
                         sourceMap = build(map) || false;
                     }
@@ -389,7 +394,7 @@ namespace Format {
         tables = tables || new LuaTable();
 
         const valType = type(val);
-        if (valType === "table" && tables.get(val) === undefined) {
+        if (valType === "table" && !tables.get(val)) {
             tables.set(val, true);
 
             if (isArray(val)) {
@@ -512,7 +517,7 @@ namespace Send {
             table.insert(dbgProperties.properties, dbgVar);
         }
         const meta = getmetatable(tbl);
-        if (meta !== undefined) {
+        if (meta) {
             dbgProperties.metatable = {type: type(meta), value: getPrintableValue(meta)};
         }
         const len = (tbl as unknown[]).length;
@@ -586,11 +591,11 @@ namespace Debugger {
                 const sourceMap = SourceMap.get(frame.source);
                 if (sourceMap) {
                     const lineMapping = sourceMap[frame.line];
-                    if (lineMapping !== undefined && sourceMap.sources !== undefined) {
+                    if (lineMapping) {
                         frame.mappedLocation = {
                             source: assert(sourceMap.sources[lineMapping.sourceIndex]),
-                            line: sourceMap[frame.line].sourceLine,
-                            column: sourceMap[frame.line].sourceColumn
+                            line: lineMapping.sourceLine,
+                            column: lineMapping.sourceColumn
                         };
                     }
                 }
@@ -621,7 +626,7 @@ namespace Debugger {
             } else {
                 [name, val] = debug.getlocal(level, index);
             }
-            if (name === undefined) {
+            if (!name) {
                 break;
             }
             if (name.sub(1, 1) !== "(") {
@@ -662,7 +667,7 @@ namespace Debugger {
         info: debug.FunctionInfo,
         locs: Locals
     ): [true, unknown] | [false, string] {
-        if (coroutine.running() !== undefined && !isType(thread, "thread")) {
+        if (coroutine.running() && !isType(thread, "thread")) {
             return [false, `unable to execute code in main thread while running in a coroutine`];
         }
 
@@ -724,7 +729,7 @@ namespace Debugger {
 
     export function debugBreak(activeThread: Thread) {
         const activeStack = threadStacks.get(activeThread);
-        if (activeStack === undefined) {
+        if (!activeStack) {
             return;
         }
 
@@ -919,7 +924,7 @@ namespace Debugger {
 
             } else if (inp.sub(1, 4) === "eval") {
                 const [expression] = inp.match("^eval%s+(.+)$");
-                if (expression === undefined) {
+                if (!expression) {
                     Send.error("Bad expression");
 
                 } else {
@@ -939,7 +944,7 @@ namespace Debugger {
 
             } else if (inp.sub(1, 5) === "props") {
                 const [expression] = inp.match("^props%s+(.+)$");
-                if (expression === undefined) {
+                if (!expression) {
                     Send.error("Bad expression");
 
                 } else {
@@ -963,7 +968,7 @@ namespace Debugger {
 
             } else if (inp.sub(1, 4) === "exec") {
                 const [statement] = inp.match("^exec%s+(.+)$");
-                if (statement === undefined) {
+                if (!statement) {
                     Send.error("Bad statement");
 
                 } else {
@@ -993,11 +998,11 @@ namespace Debugger {
         let i = 2;
         while (true) {
             const stackInfo = debug.getinfo(i, "nSluf");
-            if (stackInfo === undefined) {
+            if (!stackInfo) {
                 break;
             }
             if (!topSet) {
-                if (stackInfo.source === undefined) {
+                if (!stackInfo.source) {
                     topSet = true;
                 } else {
                     const [isDebugger] = stackInfo.source.match("debugger%.lua$");
@@ -1033,7 +1038,7 @@ namespace Debugger {
         const thread = coroutine.running() || mainThread;
         threadStacks.set(thread, stack);
 
-        if (stack.length <= breakAtDepth && (breakInThread === undefined || thread === breakInThread)) {
+        if (stack.length <= breakAtDepth && (!breakInThread || thread === breakInThread)) {
             Send.debugBreak("step", "step");
             debugBreak(thread);
             return;
@@ -1047,7 +1052,7 @@ namespace Debugger {
         }
 
         const breakpoints = Breakpoint.getAll();
-        if (info.currentline === undefined || breakpoints.length === 0) {
+        if (!info.currentline || breakpoints.length === 0) {
             return;
         }
 
@@ -1110,11 +1115,14 @@ namespace Debugger {
             if (e && file && lineStr) {
                 const line = assert(tonumber(lineStr));
                 const sourceMap = SourceMap.get(file);
-                if (sourceMap && sourceMap[line]) {
-                    const sourceFile = sourceMap.sources[sourceMap[line].sourceIndex];
-                    const sourceLine = sourceMap[line].sourceLine;
-                    const sourceColumn = sourceMap[line].sourceColumn;
-                    msgLine = `${indent}${sourceFile}:${sourceLine}:${sourceColumn}:${msgLine.sub(e + 1)}`;
+                if (sourceMap) {
+                    const lineMapping = sourceMap[line];
+                    if (lineMapping) {
+                        const sourceFile = sourceMap.sources[lineMapping.sourceIndex];
+                        const sourceLine = lineMapping.sourceLine;
+                        const sourceColumn = lineMapping.sourceColumn;
+                        msgLine = `${indent}${sourceFile}:${sourceLine}:${sourceColumn}:${msgLine.sub(e + 1)}`;
+                    }
                 }
             }
             result += msgLine;
