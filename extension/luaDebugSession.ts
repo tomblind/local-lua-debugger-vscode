@@ -514,7 +514,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         const result = await this.getEvaluateResult(expression);
         if (!result.success) {
-            if (result.error !== undefined) {
+            if (result.error !== undefined && args.context !== "hover") {
                 this.showOutput(result.error, OutputCategory.Error);
                 response.body = {result: result.error, variablesReference: 0};
             }
@@ -542,8 +542,9 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    private async getEvaluateResult(expression: string)
-        : Promise<{success: true; value: string; variablesReference: number} | {success: false; error?: string}> {
+    private async getEvaluateResult(
+        expression: string
+    ) : Promise<{success: true; value: string; variablesReference: number} | {success: false; error?: string}> {
         const msg = await this.waitForMessage();
         if (msg.type === "result") {
             const variablesReference = msg.result.type === "table" ? this.variableHandles.create(expression) : 0;
