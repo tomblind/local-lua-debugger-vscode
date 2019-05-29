@@ -287,7 +287,9 @@ export class LuaDebugSession extends LoggingDebugSession {
         response: DebugProtocol.StackTraceResponse,
         args: DebugProtocol.StackTraceArguments
     ) {
-        this.showOutput(`stackTraceRequest ${args.startFrame}/${args.levels}`, OutputCategory.Request);
+        this.showOutput(
+            `stackTraceRequest ${args.startFrame}/${args.levels} (thread ${args.threadId})`, OutputCategory.Request
+        );
 
         this.sendCommand(`thread ${args.threadId}`);
         const msg = await this.waitForMessage();
@@ -295,19 +297,16 @@ export class LuaDebugSession extends LoggingDebugSession {
         const startFrame = args.startFrame !== undefined ? args.startFrame : 0;
         const maxLevels = args.levels !== undefined ? args.levels : maxStackCount;
         if (msg.type === "stack") {
-            const frames: StackFrame[] = [];
+            const frames: DebugProtocol.StackFrame[] = [];
             const endFrame = Math.min(startFrame + maxLevels, msg.frames.length);
             for (let i = startFrame; i < endFrame; ++i) {
                 const frame = msg.frames[i];
 
-                let sourcePath = this.resolvePath(frame.source);
-                if (sourcePath === undefined) {
-                    sourcePath = frame.source;
-                }
-
                 let source: Source | undefined;
-                let line: number | undefined;
-                let column: number | undefined;
+                let line = frame.line;
+                let column = 1; //Needed for exception display: https://github.com/microsoft/vscode/issues/46080
+
+                //Mapped source
                 if (frame.mappedLocation !== undefined) {
                     const sourceRoot = this.assert(this.config).sourceRoot;
                     const mappedPath = this.resolvePath(
@@ -321,20 +320,23 @@ export class LuaDebugSession extends LoggingDebugSession {
                         column = frame.mappedLocation.column;
                     }
                 }
-                if (source === undefined || line === undefined) {
-                    source = new Source(path.basename(sourcePath), sourcePath);
-                    line = frame.line;
+
+                //Un-mapped source
+                const sourcePath = this.resolvePath(frame.source);
+                if (source === undefined && sourcePath !== undefined) {
+                    source = new Source(path.basename(frame.source), sourcePath);
                 }
 
-                //Column must be set for exception info to display (https://github.com/microsoft/vscode/issues/46080)
-                if (column === 0 || column === undefined) {
-                    column = 1;
+                //Function name
+                let frameFunc = frame.func !== undefined ? frame.func : "???";
+                if (sourcePath === undefined) {
+                    frameFunc += ` ${frame.source}`;
                 }
 
                 const frameId = makeFrameId(args.threadId, i + 1);
-                frames.push(
-                    new StackFrame(frameId, frame.func !== undefined ? frame.func : "???", source, line, column)
-                );
+                const stackFrame: DebugProtocol.StackFrame = new StackFrame(frameId, frameFunc, source, line, column);
+                stackFrame.presentationHint = sourcePath === undefined ? "subtle" : "normal";
+                frames.push(stackFrame);
             }
             response.body = {stackFrames: frames, totalFrames: msg.frames.length};
 
