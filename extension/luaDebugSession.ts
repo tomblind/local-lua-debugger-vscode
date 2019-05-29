@@ -110,7 +110,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private readonly variableHandles = new Handles<string>(ScopeType.Global + 1);
     private breakpointsPending = false;
     private autoContinueNext = false;
-    private activeThreads = new Map<number, Thread>();
+    private readonly activeThreads = new Map<number, Thread>();
 
     public constructor() {
         super("lldv-log.txt");
@@ -325,6 +325,12 @@ export class LuaDebugSession extends LoggingDebugSession {
                     source = new Source(path.basename(sourcePath), sourcePath);
                     line = frame.line;
                 }
+
+                //Column must be set for exception info to display (https://github.com/microsoft/vscode/issues/46080)
+                if (column === 0 || column === undefined) {
+                    column = 1;
+                }
+
                 const frameId = makeFrameId(args.threadId, i + 1);
                 frames.push(
                     new StackFrame(frameId, frame.func !== undefined ? frame.func : "???", source, line, column)
@@ -535,8 +541,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     private async getEvaluateResult(expression: string)
-        : Promise<{success: true; value: string; variablesReference: number} | {success: false; error?: string}>
-    {
+        : Promise<{success: true; value: string; variablesReference: number} | {success: false; error?: string}> {
         const msg = await this.waitForMessage();
         if (msg.type === "result") {
             const variablesReference = msg.result.type === "table" ? this.variableHandles.create(expression) : 0;
