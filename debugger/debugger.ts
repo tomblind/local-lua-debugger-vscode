@@ -548,7 +548,6 @@ namespace Debugger {
 
     const prompt = "";
 
-    const threadStacks = setmetatable(new LuaTable<Thread, debug.FunctionInfo[]>(), {__mode: "k"});
     const threadIds = setmetatable(new LuaTable<Thread, number>(), {__mode: "k"});
 
     const mainThreadId = 1;
@@ -669,7 +668,7 @@ namespace Debugger {
         locs: Locals
     ): [true, unknown] | [false, string] {
         if (coroutine.running() && !isType(thread, "thread")) {
-            return [false, `unable to execute code in main thread while running in a coroutine`];
+            return [false, "unable to access main thread while running in a coroutine"];
         }
 
         const ups = getUpvalues(info);
@@ -728,7 +727,7 @@ namespace Debugger {
 
     export function debugBreak(activeThread: Thread, stackOffset: number) {
         ++stackOffset;
-        const activeStack = Debugger.updateActiveStack(activeThread, stackOffset);
+        const activeStack = getStack(stackOffset);
 
         const activeThreadFrameOffset = stackOffset + 1;
         const inactiveThreadFrameOffset = 1;
@@ -788,19 +787,20 @@ namespace Debugger {
                         }
                     }
                     if (newThread !== undefined) {
-                        const newStack = threadStacks.get(newThread);
-                        if (newStack !== undefined) {
-                            currentStack = newStack;
-                            currentThread = newThread;
-                            frame = 0;
-                            frameOffset = currentThread === activeThread
-                                && activeThreadFrameOffset
-                                || inactiveThreadFrameOffset;
-                            info = assert(currentStack[frame]);
-                            backtrace(currentStack, frame);
+                        if (newThread === activeThread) {
+                            currentStack = activeStack;
+                        } else if (newThread === mainThreadName) {
+                            currentStack = [{name: "unable to access main thread while running in a coroutine"}];
                         } else {
-                            Send.error("Bad thread id");
+                            currentStack = getStack(newThread);
                         }
+                        currentThread = newThread;
+                        frame = 0;
+                        frameOffset = currentThread === activeThread
+                            && activeThreadFrameOffset
+                            || inactiveThreadFrameOffset;
+                        info = assert(currentStack[frame]);
+                        backtrace(currentStack, frame);
                     } else {
                         Send.error("Bad thread id");
                     }
@@ -992,19 +992,24 @@ namespace Debugger {
         }
     }
 
-    export function updateActiveStack(activeThread: Thread, offset: number) {
-        const activeStack: debug.FunctionInfo[] = [];
-        let i = offset + 1;
+    export function getStack(threadOrOffset: LuaThread | number) {
+        let thread: LuaThread | undefined;
+        let i = 1;
+        if (isType(threadOrOffset, "thread")) {
+            thread = threadOrOffset;
+        } else {
+            i += threadOrOffset;
+        }
+        const stack: debug.FunctionInfo[] = [];
         while (true) {
-            const stackInfo = debug.getinfo(i, "nSluf");
+            const stackInfo = thread && debug.getinfo(thread, i, "nSluf") || debug.getinfo(i, "nSluf");
             if (!stackInfo) {
                 break;
             }
-            table.insert(activeStack, stackInfo);
+            table.insert(stack, stackInfo);
             ++i;
         }
-        threadStacks.set(activeThread, activeStack);
-        return activeStack;
+        return stack;
     }
 
     function comparePaths(a: string, b: string) {
@@ -1029,13 +1034,15 @@ namespace Debugger {
         }
 
         const activeThread = coroutine.running() || mainThread;
-        const activeStack = updateActiveStack(activeThread, stackOffset);
 
         //Stepping
-        if (activeStack.length <= breakAtDepth && (!breakInThread || activeThread === breakInThread)) {
-            Send.debugBreak("step", "step");
-            debugBreak(activeThread, stackOffset);
-            return;
+        if (breakAtDepth > 0) {
+            const activeStack = getStack(stackOffset);
+            if (activeStack.length <= breakAtDepth && (!breakInThread || activeThread === breakInThread)) {
+                Send.debugBreak("step", "step");
+                debugBreak(activeThread, stackOffset);
+                return;
+            }
         }
 
         //Breakpoints
@@ -1074,7 +1081,7 @@ namespace Debugger {
     export function setHook() {
         debug.sethook(debugHook, "l");
 
-        for (const [thread] of pairs(threadStacks)) {
+        for (const [thread] of pairs(threadIds)) {
             if (isType(thread, "thread") && coroutine.status(thread) !== "dead") {
                 debug.sethook(thread, debugHook, "l");
             }
@@ -1084,7 +1091,7 @@ namespace Debugger {
     export function clearHook() {
         debug.sethook();
 
-        for (const [thread] of pairs(threadStacks)) {
+        for (const [thread] of pairs(threadIds)) {
             if (isType(thread, "thread") && coroutine.status(thread) !== "dead") {
                 debug.sethook(thread);
             }
@@ -1122,7 +1129,6 @@ namespace Debugger {
     const luaCoroutineCreate = coroutine.create;
     coroutine.create = (f: Function) => {
         const thread = luaCoroutineCreate(f);
-        threadStacks.set(thread, []);
         threadIds.set(thread, nextThreadId);
         ++nextThreadId;
         if (debug.gethook()) {
