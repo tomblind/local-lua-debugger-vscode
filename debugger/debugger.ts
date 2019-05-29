@@ -567,7 +567,7 @@ namespace Debugger {
 
     /** @tupleReturn */
     function loadCode(code: string, env?: Env): [{ (this: void): unknown }, undefined] | [undefined, string] {
-        if (loadstring) {
+        if (setfenv) {
             const [f, e] = loadstring(code, code);
             if (f && env) {
                 setfenv(f, env);
