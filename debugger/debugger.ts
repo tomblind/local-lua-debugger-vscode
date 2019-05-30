@@ -1104,27 +1104,25 @@ namespace Debugger {
         breakAtDepth = math.huge;
     }
 
-    //Attempt to convert all line-leading source file locations using source maps
-    function mapSources(msg: string) {
-        let result = "";
-        for (let [msgLine] of msg.gmatch("[^\r\n]+[\r\n]*")) {
-            const [_, e, indent, file, lineStr] = msgLine.find("^(%s*)(.+):(%d+):");
-            if (e && file && lineStr) {
-                const line = assert(tonumber(lineStr));
-                const sourceMap = SourceMap.get(file);
-                if (sourceMap) {
-                    const lineMapping = sourceMap[line];
-                    if (lineMapping) {
-                        const sourceFile = sourceMap.sources[lineMapping.sourceIndex];
-                        const sourceLine = lineMapping.sourceLine;
-                        const sourceColumn = lineMapping.sourceColumn;
-                        msgLine = `${indent}${sourceFile}:${sourceLine}:${sourceColumn}:${msgLine.sub(e + 1)}`;
-                    }
-                }
+    //Convert source paths to mapped
+    function mapSource(indent: string, file: string, lineStr: string, remainder: string) {
+        const sourceMap = SourceMap.get(file);
+        if (sourceMap) {
+            const line = assert(tonumber(lineStr));
+            const lineMapping = sourceMap[line];
+            if (lineMapping) {
+                const sourceFile = sourceMap.sources[lineMapping.sourceIndex];
+                const sourceLine = lineMapping.sourceLine;
+                const sourceColumn = lineMapping.sourceColumn;
+                return `${indent}${sourceFile}:${sourceLine}:${sourceColumn}:${remainder}`;
             }
-            result += msgLine;
         }
-        return result;
+        return `${indent}${file}:${lineStr}:${remainder}`;
+    }
+
+    function mapSources(str: string) {
+        [str] = str.gsub("(%s*)([^\r\n]+):(%d+):([^\r\n]+)", mapSource);
+        return str;
     }
 
     export function onError(err: unknown) {
