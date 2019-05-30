@@ -722,6 +722,26 @@ namespace Debugger {
         return inp;
     }
 
+    function getStack(threadOrOffset: LuaThread | number) {
+        let thread: LuaThread | undefined;
+        let i = 1;
+        if (isType(threadOrOffset, "thread")) {
+            thread = threadOrOffset;
+        } else {
+            i += threadOrOffset;
+        }
+        const stack: debug.FunctionInfo[] = [];
+        while (true) {
+            const stackInfo = thread && debug.getinfo(thread, i, "nSluf") || debug.getinfo(i, "nSluf");
+            if (!stackInfo) {
+                break;
+            }
+            table.insert(stack, stackInfo);
+            ++i;
+        }
+        return stack;
+    }
+
     let breakAtDepth = 0;
     let breakInThread: Thread | undefined;
 
@@ -992,26 +1012,6 @@ namespace Debugger {
         }
     }
 
-    export function getStack(threadOrOffset: LuaThread | number) {
-        let thread: LuaThread | undefined;
-        let i = 1;
-        if (isType(threadOrOffset, "thread")) {
-            thread = threadOrOffset;
-        } else {
-            i += threadOrOffset;
-        }
-        const stack: debug.FunctionInfo[] = [];
-        while (true) {
-            const stackInfo = thread && debug.getinfo(thread, i, "nSluf") || debug.getinfo(i, "nSluf");
-            if (!stackInfo) {
-                break;
-            }
-            table.insert(stack, stackInfo);
-            ++i;
-        }
-        return stack;
-    }
-
     function comparePaths(a: string, b: string) {
         const aLen = a.length;
         const bLen = b.length;
@@ -1028,7 +1028,7 @@ namespace Debugger {
         const stackOffset = 2;
 
         //Ignore debugger code
-        const topFrame = debug.getinfo(stackOffset, "nSluf");
+        const topFrame = debug.getinfo(stackOffset, "Sl");
         if (!topFrame || !topFrame.source || topFrame.source.sub(-12) === "debugger.lua") {
             return;
         }

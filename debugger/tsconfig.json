@@ -16,6 +16,7 @@
 	"tstl":
 	{
 		"luaTarget": "5.1",
-		"noHeader": true
+		"noHeader": true,
+		"noHoisting": true
 	}
 }
