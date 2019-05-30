@@ -1,8 +1,6 @@
 declare namespace LuaDebug {
-    type Tag = "$luaDebug";
-
     interface MessageBase {
-        tag: Tag;
+        tag: "$luaDebug";
     }
 
     interface Error extends MessageBase {
@@ -14,6 +12,7 @@ declare namespace LuaDebug {
         type: "debugBreak";
         message: string;
         breakType: "step" | "breakpoint" | "error";
+        threadId: number;
     }
 
     interface MappedLocation {

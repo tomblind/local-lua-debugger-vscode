@@ -614,14 +614,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (msg.breakType === "error") {
             this.showOutput(msg.message, OutputCategory.Error);
 
-            this.sendCommand("threads");
-            const threadsMsg = await this.waitForMessage();
-
-            const threadId = threadsMsg.type === "threads"
-                ? this.assert(threadsMsg.threads.find(t => t.active === true)).id
-                : mainThreadId;
-
-            const evt: DebugProtocol.StoppedEvent = new StoppedEvent("exception", threadId, msg.message);
+            const evt: DebugProtocol.StoppedEvent = new StoppedEvent("exception", msg.threadId, msg.message);
             evt.body.allThreadsStopped = true;
             this.sendEvent(evt);
             return;
@@ -632,14 +625,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             this.sendCommand("cont");
 
         } else {
-            this.sendCommand("threads");
-            const threadsMsg = await this.waitForMessage();
-
-            const threadId = threadsMsg.type === "threads"
-                ? this.assert(threadsMsg.threads.find(t => t.active === true)).id
-                : mainThreadId;
-
-            const evt: DebugProtocol.StoppedEvent = new StoppedEvent("breakpoint", threadId);
+            const evt: DebugProtocol.StoppedEvent = new StoppedEvent("breakpoint", msg.threadId);
             evt.body.allThreadsStopped = true;
             this.sendEvent(evt);
         }

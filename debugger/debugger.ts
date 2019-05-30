@@ -446,8 +446,8 @@ namespace Send {
         send(dbgError);
     }
 
-    export function debugBreak(message: string, breakType: LuaDebug.DebugBreak["breakType"]) {
-        const dbgBreak: LuaDebug.DebugBreak = {tag: "$luaDebug", type: "debugBreak", message, breakType};
+    export function debugBreak(message: string, breakType: LuaDebug.DebugBreak["breakType"], threadId: number) {
+        const dbgBreak: LuaDebug.DebugBreak = {tag: "$luaDebug", type: "debugBreak", message, breakType, threadId};
         send(dbgBreak);
     }
 
@@ -549,10 +549,8 @@ namespace Debugger {
     const prompt = "";
 
     const threadIds = setmetatable(new LuaTable<Thread, number>(), {__mode: "k"});
-
     const mainThreadId = 1;
     threadIds.set(mainThread, mainThreadId);
-
     let nextThreadId = mainThreadId + 1;
 
     // For Lua 5.2+
@@ -745,7 +743,7 @@ namespace Debugger {
     let breakAtDepth = 0;
     let breakInThread: Thread | undefined;
 
-    export function debugBreak(activeThread: Thread, stackOffset: number) {
+    function debugBreak(activeThread: Thread, stackOffset: number) {
         ++stackOffset;
         const activeStack = getStack(stackOffset);
 
@@ -1039,7 +1037,7 @@ namespace Debugger {
         if (breakAtDepth > 0) {
             const activeStack = getStack(stackOffset);
             if (activeStack.length <= breakAtDepth && (!breakInThread || activeThread === breakInThread)) {
-                Send.debugBreak("step", "step");
+                Send.debugBreak("step", "step", assert(threadIds.get(activeThread)));
                 debugBreak(activeThread, stackOffset);
                 return;
             }
@@ -1071,7 +1069,11 @@ namespace Debugger {
                     )
                 )
             ) {
-                Send.debugBreak(`breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`, "breakpoint");
+                Send.debugBreak(
+                    `breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`,
+                    "breakpoint",
+                    assert(threadIds.get(activeThread))
+                );
                 debugBreak(activeThread, stackOffset);
                 break;
             }
@@ -1103,7 +1105,7 @@ namespace Debugger {
     }
 
     //Attempt to convert all line-leading source file locations using source maps
-    export function mapSources(msg: string) {
+    function mapSources(msg: string) {
         let result = "";
         for (let [msgLine] of msg.gmatch("[^\r\n]+[\r\n]*")) {
             const [_, e, indent, file, lineStr] = msgLine.find("^(%s*)(.+):(%d+):");
@@ -1123,6 +1125,13 @@ namespace Debugger {
             result += msgLine;
         }
         return result;
+    }
+
+    export function onError(err: unknown) {
+        const msg = mapSources(tostring(err));
+        const thread = coroutine.running() || mainThread;
+        Send.debugBreak(msg, "error", assert(threadIds.get(thread)));
+        debugBreak(thread, 2);
     }
 
     //Track coroutines
@@ -1146,12 +1155,12 @@ namespace Debugger {
     ): string => {
         let trace = luaDebugTraceback(threadOrMessage as LuaThread, messageOrLevel as string, level as number);
         if (trace) {
-            trace = Debugger.mapSources(trace);
+            trace = mapSources(trace);
         }
 
         const thread = isType(threadOrMessage, "thread") && threadOrMessage || coroutine.running() || mainThread;
-        Send.debugBreak(trace || "error", "error");
-        Debugger.debugBreak(thread, 3);
+        Send.debugBreak(trace || "error", "error", assert(threadIds.get(thread)));
+        debugBreak(thread, 3);
 
         return trace;
     };
@@ -1185,11 +1194,7 @@ export function start(entryPoint?: string | { (this: void): void }, breakImmedia
                 (entryPoint as { (this: void): void })();
                 stop();
             },
-            err => {
-                err = Debugger.mapSources(tostring(err));
-                Send.debugBreak(err, "error");
-                Debugger.debugBreak(coroutine.running() || mainThread, 2);
-            }
+            Debugger.onError
         );
     }
 }
