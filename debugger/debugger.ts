@@ -140,8 +140,8 @@ namespace Breakpoint {
         return current;
     }
 
-    export function add(file: string, line: number) {
-        table.insert(current, {file: Path.format(file), line, enabled: true});
+    export function add(file: string, line: number, condition?: string) {
+        table.insert(current, {file: Path.format(file), line, enabled: true, condition});
     }
 
     export function remove(file: string, line: number) {
@@ -779,11 +779,11 @@ namespace Debugger {
                         "props                        : show all properties of a table",
                         "eval                         : evaluate an expression in the current context",
                         "exec                         : execute a statement in the current context",
-                        "break [list]                 : show all breakpoints",
-                        "break set file.ext:n         : set a breakpoint",
+                        "break set file.ext:n [cond]  : set a breakpoint",
                         "break del|delete file.ext:n  : delete a breakpoint",
                         "break en|enable file.ext:n   : enable a breakpoint",
                         "break dis|disable file.ext:n : disable a breakpoint",
+                        "break list                   : show all breakpoints",
                         "break clear                  : delete all breakpoints",
                         "threads                      : list active thread ids",
                         "thread n                     : set current thread by id"
@@ -874,10 +874,7 @@ namespace Debugger {
                 const globs = getGlobals();
                 Send.vars(globs);
 
-            } else if (inp === "break") {
-                Send.breakpoints(Breakpoint.getAll());
-
-            } else if (inp.sub(1, 5) === "break") {
+            } else if (inp.sub(1, 6) === "break ") {
                 const [cmd] = inp.match("^break%s+([a-z]+)");
                 let file: string | undefined;
                 let line: number | undefined;
@@ -891,7 +888,7 @@ namespace Debugger {
                     || cmd === "enable"
                 ) {
                     let lineStr: string | undefined;
-                    [file, lineStr] = inp.match("^break%s+[a-z]+%s+(.-):(%d+)$");
+                    [file, lineStr] = inp.match("^break%s+[a-z]+%s+(.-):(%d+)");
                     if (file !== undefined && lineStr !== undefined) {
                         line = assert(tonumber(lineStr));
                         breakpoint = Breakpoint.get(file, line);
@@ -899,7 +896,8 @@ namespace Debugger {
                 }
                 if (cmd === "set") {
                     if (file !== undefined && line !== undefined) {
-                        Breakpoint.add(file, line);
+                        const [condition] = inp.match("^break%s+[a-z]+%s+.-:%d+%s+(.+)");
+                        Breakpoint.add(file, line, condition);
                         breakpoint = assert(Breakpoint.get(file, line));
                         Send.breakpoints([breakpoint]);
                     } else {
@@ -932,6 +930,7 @@ namespace Debugger {
 
                 } else if (cmd === "clear") {
                     Breakpoint.clear();
+                    Send.breakpoints(Breakpoint.getAll());
 
                 } else if (cmd === "list") {
                     Send.breakpoints(Breakpoint.getAll());
@@ -1026,7 +1025,7 @@ namespace Debugger {
         const stackOffset = 2;
 
         //Ignore debugger code
-        const topFrame = debug.getinfo(stackOffset, "Sl");
+        const topFrame = debug.getinfo(stackOffset, "nSluf");
         if (!topFrame || !topFrame.source || topFrame.source.sub(-12) === "debugger.lua") {
             return;
         }
@@ -1059,24 +1058,46 @@ namespace Debugger {
                 sourceMapFile = sourceMap.sources[lineMapping.sourceIndex];
             }
         }
-        for (const [_, breakpoint] of ipairs(breakpoints)) {
-            if (breakpoint.enabled
-                && ((breakpoint.line === topFrame.currentline && comparePaths(breakpoint.file, source))
-                    || (lineMapping
-                        && sourceMapFile
-                        && breakpoint.line === lineMapping.sourceLine
+
+        let hitBreakpoint: LuaDebug.Breakpoint | undefined;
+        for (let i = 0; i < breakpoints.length && !hitBreakpoint; ++i) {
+            const breakpoint = breakpoints[i];
+            if (breakpoint.enabled) {
+                if (
+                    (
+                        breakpoint.line === topFrame.currentline
+                        && comparePaths(breakpoint.file, source)
+                    )
+                    || (
+                        sourceMapFile
+                        && breakpoint.line === (lineMapping as SourceLineMapping).sourceLine
                         && comparePaths(breakpoint.file, sourceMapFile)
                     )
-                )
-            ) {
-                Send.debugBreak(
-                    `breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`,
-                    "breakpoint",
-                    assert(threadIds.get(activeThread))
-                );
-                debugBreak(activeThread, stackOffset);
-                break;
+                ) {
+                    if (breakpoint.condition) {
+                        const [success, result] = execute(
+                            "return " + breakpoint.condition,
+                            stackOffset + 1,
+                            activeThread,
+                            topFrame,
+                            getLocals(stackOffset + 1, activeThread)
+                        );
+                        if (success && result) {
+                            hitBreakpoint = breakpoint;
+                        }
+                    } else {
+                        hitBreakpoint = breakpoint;
+                    }
+                }
             }
+        }
+        if (hitBreakpoint) {
+            Send.debugBreak(
+                `breakpoint hit: "${hitBreakpoint.file}:${hitBreakpoint.line}"`,
+                "breakpoint",
+                assert(threadIds.get(activeThread))
+            );
+            debugBreak(activeThread, stackOffset);
         }
     }
 

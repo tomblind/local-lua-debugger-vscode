@@ -101,7 +101,7 @@ function makeFrameId(threadId: number, frame: number) {
 }
 
 export class LuaDebugSession extends LoggingDebugSession {
-    private readonly fileBreakpointLines: { [file: string]: number[] } = {};
+    private readonly fileBreakpoints: { [file: string]: DebugProtocol.SourceBreakpoint[] | undefined } = {};
     private config?: LaunchConfig;
     private process?: child_process.ChildProcess;
     private outputText = "";
@@ -111,6 +111,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private breakpointsPending = false;
     private autoContinueNext = false;
     private readonly activeThreads = new Map<number, Thread>();
+    private isRunning = false;
 
     public constructor() {
         super("lldv-log.txt");
@@ -130,6 +131,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         response.body.supportsEvaluateForHovers = true;
         response.body.supportsSetVariable = true;
         response.body.supportsTerminateRequest = true;
+        response.body.supportsConditionalBreakpoints = true;
 
         this.sendResponse(response);
 
@@ -222,32 +224,30 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`setBreakPointsRequest`, OutputCategory.Request);
 
         const filePath = args.source.path as string;
-        const setLines = args.breakpoints !== undefined ? args.breakpoints.map(bp => bp.line) : [];
 
-        if (this.process !== undefined) {
-            const oldLines = this.fileBreakpointLines[filePath];
-            if (oldLines !== undefined) {
-                for (const line of oldLines) {
-                    if (!setLines.some(l => l === line)) {
-                        this.sendCommand(`break delete ${filePath}:${line}`);
-                        await this.waitForMessage();
-                    }
+        if (this.process !== undefined && !this.isRunning) {
+            const oldBreakpoints = this.fileBreakpoints[filePath];
+            if (oldBreakpoints !== undefined) {
+                for (const breakpoint of oldBreakpoints) {
+                    await this.deleteBreakpoint(filePath, breakpoint);
                 }
             }
 
-            for (const line of setLines) {
-                if (oldLines === undefined || !oldLines.some(l => l === line)) {
-                    this.sendCommand(`break set ${filePath}:${line}`);
-                    await this.waitForMessage();
+            if (args.breakpoints !== undefined) {
+                for (const breakpoint of args.breakpoints) {
+                    await this.setBreakpoint(filePath, breakpoint);
                 }
             }
+
         } else {
             this.breakpointsPending = true;
         }
 
-        this.fileBreakpointLines[filePath] = setLines;
+        this.fileBreakpoints[filePath] = args.breakpoints;
 
-        const breakpoints: Breakpoint[] = setLines.map(line => new Breakpoint(true, line));
+        const breakpoints: Breakpoint[] = args.breakpoints !== undefined
+            ? args.breakpoints.map(breakpoint => new Breakpoint(true, breakpoint.line))
+            : [];
         response.body = {breakpoints};
         this.sendResponse(response);
     }
@@ -429,6 +429,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`continueRequest`, OutputCategory.Request);
         this.variableHandles.reset();
         this.sendCommand("cont");
+        this.isRunning = true;
         this.sendResponse(response);
     }
 
@@ -436,6 +437,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`nextRequest`, OutputCategory.Request);
         this.variableHandles.reset();
         this.sendCommand("step");
+        this.isRunning = true;
         this.sendResponse(response);
     }
 
@@ -443,6 +445,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`stepInRequest`, OutputCategory.Request);
         this.variableHandles.reset();
         this.sendCommand("stepin");
+        this.isRunning = true;
         this.sendResponse(response);
     }
 
@@ -450,6 +453,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`stepOutRequest`, OutputCategory.Request);
         this.variableHandles.reset();
         this.sendCommand("stepout");
+        this.isRunning = true;
         this.sendResponse(response);
     }
 
@@ -539,6 +543,9 @@ export class LuaDebugSession extends LoggingDebugSession {
                 this.process.kill();
             }
         }
+
+        this.isRunning = false;
+
         this.sendResponse(response);
     }
 
@@ -598,15 +605,32 @@ export class LuaDebugSession extends LoggingDebugSession {
         return undefined;
     }
 
+    private setBreakpoint(filePath: string, breakpoint: DebugProtocol.SourceBreakpoint) {
+        const cmd = breakpoint.condition !== undefined
+            ? `break set ${filePath}:${breakpoint.line} ${breakpoint.condition}`
+            : `break set ${filePath}:${breakpoint.line}`;
+        this.sendCommand(cmd);
+        return this.waitForMessage();
+    }
+
+    private deleteBreakpoint(filePath: string, breakpoint: DebugProtocol.SourceBreakpoint) {
+        this.sendCommand(`break delete ${filePath}:${breakpoint.line}`);
+        return this.waitForMessage();
+    }
+
     private async onDebuggerStop(msg: LuaDebug.DebugBreak) {
+        this.isRunning = false;
+
         if (this.breakpointsPending) {
             this.breakpointsPending = false;
 
-            for (const file in this.fileBreakpointLines) {
-                const lines = this.fileBreakpointLines[file];
-                for (const line of lines) {
-                    this.sendCommand(`break set ${file}:${line}`);
-                    await this.waitForMessage();
+            this.sendCommand("break clear");
+            await this.waitForMessage();
+
+            for (const filePath in this.fileBreakpoints) {
+                const breakpoints = this.fileBreakpoints[filePath] as DebugProtocol.SourceBreakpoint[];
+                for (const breakpoint of breakpoints) {
+                    await this.setBreakpoint(filePath, breakpoint);
                 }
             }
         }
@@ -631,6 +655,13 @@ export class LuaDebugSession extends LoggingDebugSession {
         }
     }
 
+    private handleMessage(msg: LuaDebug.Message) {
+        const handler = this.messageHandlerQueue.shift();
+        if (handler !== undefined) {
+            handler(msg);
+        }
+    }
+
     private async onDebuggerOutput(data: unknown, isError: boolean) {
         const dataStr = `${data}`;
         if (isError) {
@@ -647,10 +678,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             if (msg.type === "debugBreak") {
                 debugBreak = msg;
             } else {
-                const handler = this.messageHandlerQueue.shift();
-                if (handler !== undefined) {
-                    handler(msg);
-                }
+                this.handleMessage(msg);
             }
         }
 
@@ -668,14 +696,21 @@ export class LuaDebugSession extends LoggingDebugSession {
             return;
         }
 
+        this.process = undefined;
+        this.isRunning = false;
+
         this.showOutput(`debugging ended: ${result}`, OutputCategory.Info);
         this.sendEvent(new TerminatedEvent());
-        this.process = undefined;
     }
 
     private sendCommand(cmd: string) {
-        this.showOutput(cmd, OutputCategory.Command);
-        this.assert(this.assert(this.process).stdin).write(`${cmd}\n`);
+        if (!this.isRunning) {
+            this.showOutput(cmd, OutputCategory.Command);
+            this.assert(this.assert(this.process).stdin).write(`${cmd}\n`);
+        } else {
+            this.showOutput(`skipping command: ${cmd}`, OutputCategory.Error);
+            this.handleMessage({tag: "$luaDebug", type: "error", error: "debugger is running"});
+        }
     }
 
     private waitForMessage(): Promise<LuaDebug.Message> {

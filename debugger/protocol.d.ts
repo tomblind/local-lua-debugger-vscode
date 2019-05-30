@@ -64,6 +64,7 @@ declare namespace LuaDebug {
         line: number;
         file: string;
         enabled: boolean;
+        condition?: string;
     }
 
     interface Breakpoints extends MessageBase {
