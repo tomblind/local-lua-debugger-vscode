@@ -4,8 +4,7 @@
 		"target": "es6",
 		"strict": true,
 		"keyofStringsOnly": true,
-		"typeRoots": ["./luatypes"],
-		"types": ["esnone", "lua51"],
+		"typeRoots": [],
 		"noLib": true,
 		"outDir": "../out",
 		// "sourceMap": true
