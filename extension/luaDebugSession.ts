@@ -390,8 +390,18 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         default:
             baseName = this.assert(this.variableHandles.get(args.variablesReference));
-            cmd = `props ${baseName}`;
-            this.showOutput(`variablesRequest ${baseName}`, OutputCategory.Request);
+            if (args.filter === "indexed") {
+                cmd = `elems ${baseName}`;
+                if (args.start !== undefined) {
+                    cmd += ` ${args.start}`;
+                    if (args.count !== undefined) {
+                        cmd += ` ${args.count}`;
+                    }
+                }
+            } else {
+                cmd = `props ${baseName}`;
+            }
+            this.showOutput(`variablesRequest ${baseName} start=${args.start},count=${args.count},filter=${args.filter}`, OutputCategory.Request);
             break;
         }
 
@@ -416,7 +426,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
             if (vars.length !== undefined) {
                 const value: LuaDebug.Value = {type: "number", value: vars.length.toString()};
-                variables.push(this.buildVariable(value, "#${baseName}", tableLengthDisplayName));
+                variables.push(this.buildVariable(value, `#${baseName}`, tableLengthDisplayName));
             }
         }
         variables.sort(sortVariables);
@@ -582,7 +592,8 @@ export class LuaDebugSession extends LoggingDebugSession {
         return new Variable(
             variableName !== undefined ? variableName : (variable as LuaDebug.Variable).name,
             valueStr,
-            ref
+            ref,
+            variable.length
         );
     }
 

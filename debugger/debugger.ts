@@ -485,6 +485,9 @@ namespace Send {
         };
         for (const [name, info] of pairs(locs)) {
             const dbgVar: LuaDebug.Variable = {type: info.type, name, value: getPrintableValue(info.val)};
+            if (isType(info.val, "table")) {
+                dbgVar.length = (info.val as unknown[]).length;
+            }
             table.insert(dbgVariables.variables, dbgVar);
         }
         send(dbgVariables);
@@ -498,6 +501,9 @@ namespace Send {
         };
         for (const [name, info] of pairs(varsObj)) {
             const dbgVar: LuaDebug.Variable = {type: info.type, name, value: getPrintableValue(info.val)};
+            if (isType(info.val, "table")) {
+                dbgVar.length = (info.val as unknown[]).length;
+            }
             table.insert(dbgVariables.variables, dbgVar);
         }
         send(dbgVariables);
@@ -512,6 +518,9 @@ namespace Send {
         for (const [key, val] of pairs(tbl)) {
             const name = getPrintableValue(key);
             const dbgVar: LuaDebug.Variable = {type: type(val), name, value: getPrintableValue(val)};
+            if (isType(val, "table")) {
+                dbgVar.length = (val as unknown[]).length;
+            }
             table.insert(dbgProperties.properties, dbgVar);
         }
         const meta = getmetatable(tbl);
@@ -521,6 +530,23 @@ namespace Send {
         const len = (tbl as unknown[]).length;
         if (len > 0 || (dbgProperties.properties.length === 0 && !dbgProperties.metatable)) {
             dbgProperties.length = len;
+        }
+        send(dbgProperties);
+    }
+
+    export function elems(arr: unknown[], first = 1, count = arr.length) {
+        const dbgProperties: LuaDebug.Properties = {
+            tag: "$luaDebug",
+            type: "properties",
+            properties: Format.makeExplicitArray()
+        };
+        const last = math.min(first + count - 1, arr.length);
+        first = math.max(first, 1);
+        for (let i = first; i <= last; ++i) {
+            const val = (arr as Record<string, unknown>)[i];
+            const name = getPrintableValue(i);
+            const dbgVar: LuaDebug.Variable = {type: type(val), name, value: getPrintableValue(val)};
+            table.insert(dbgProperties.properties, dbgVar);
         }
         send(dbgProperties);
     }
@@ -802,6 +828,7 @@ namespace Debugger {
                         "ups                          : show all upvalue variables available in the current context",
                         "globals                      : show all global variables in current environment",
                         "props                        : show all properties of a table",
+                        "elems [start] [count]        : show array elements of a table",
                         "eval                         : evaluate an expression in the current context",
                         "exec                         : execute a statement in the current context",
                         "break set file.ext:n [cond]  : set a breakpoint",
@@ -818,7 +845,7 @@ namespace Debugger {
             } else if (inp === "threads") {
                 Send.threads(threadIds, activeThread);
 
-            } else if (inp.sub(1, 7) === "thread ") {
+            } else if (inp.sub(1, 6) === "thread") {
                 const [newThreadIdStr] = inp.match("^thread%s+(%d+)$");
                 if (newThreadIdStr !== undefined) {
                     const newThreadId = assert(tonumber(newThreadIdStr));
@@ -875,7 +902,7 @@ namespace Debugger {
             } else if (inp === "stack") {
                 backtrace(currentStack, frame);
 
-            } else if (inp.sub(1, 6) === "frame ") {
+            } else if (inp.sub(1, 5) === "frame") {
                 const [newFrameStr] = inp.match("^frame%s+(%d+)$");
                 if (newFrameStr !== undefined) {
                     const newFrame = assert(tonumber(newFrameStr));
@@ -902,7 +929,7 @@ namespace Debugger {
                 const globs = getGlobals();
                 Send.vars(globs);
 
-            } else if (inp.sub(1, 6) === "break ") {
+            } else if (inp.sub(1, 5) === "break") {
                 const [cmd] = inp.match("^break%s+([a-z]+)");
                 let file: string | undefined;
                 let line: number | undefined;
@@ -991,6 +1018,24 @@ namespace Debugger {
                     if (s) {
                         if (isType(r, "table")) {
                             Send.props(r);
+                        } else {
+                            Send.error(`Expression "${expression}" is not a table`);
+                        }
+                    } else {
+                        Send.error(r as string);
+                    }
+                }
+
+            } else if (inp.sub(1, 5) === "elems") {
+                const [expression, first, count] = inp.match("^elems%s+(.-)%s*(%d*)%s*(%d*)$");
+                if (!expression) {
+                    Send.error("Bad expression");
+
+                } else {
+                    const [s, r] = execute("return " + expression, currentThread, frame, frameOffset, info);
+                    if (s) {
+                        if (isType(r, "table")) {
+                            Send.elems(r as unknown[], tonumber(first), tonumber(count));
                         } else {
                             Send.error(`Expression "${expression}" is not a table`);
                         }

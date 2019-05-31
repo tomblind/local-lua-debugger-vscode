@@ -37,6 +37,7 @@ declare namespace LuaDebug {
     interface Value {
         type: string;
         value?: string;
+        length?: number;
     }
 
     interface Variable extends Value {
