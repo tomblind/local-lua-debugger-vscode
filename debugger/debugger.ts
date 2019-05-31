@@ -363,12 +363,8 @@ namespace Format {
     }
     escapesPattern = `[${escapesPattern}]`;
 
-    function transformEscape(e: string) {
-        return escapes[e];
-    }
-
     function escape(str: string) {
-        const [escaped] = str.gsub(escapesPattern, transformEscape);
+        const [escaped] = str.gsub(escapesPattern, escapes);
         return escaped;
     }
 
