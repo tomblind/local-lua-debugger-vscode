@@ -469,12 +469,14 @@ namespace Send {
             threads: []
         };
         for (const [thread, threadId] of pairs(threadIds)) {
-            const dbgThread: LuaDebug.Thread = {
-                name: thread === mainThread && mainThreadName || tostring(thread),
-                id: threadId,
-                active: thread === activeThread || undefined
-            };
-            table.insert(dbgThreads.threads, dbgThread);
+            if (thread === mainThread || coroutine.status(thread as LuaThread) !== "dead") {
+                const dbgThread: LuaDebug.Thread = {
+                    name: thread === mainThread && mainThreadName || tostring(thread),
+                    id: threadId,
+                    active: thread === activeThread || undefined
+                };
+                table.insert(dbgThreads.threads, dbgThread);
+            }
         }
         send(dbgThreads);
     }
@@ -521,7 +523,7 @@ namespace Send {
             dbgProperties.metatable = {type: type(meta), value: getPrintableValue(meta)};
         }
         const len = (tbl as unknown[]).length;
-        if (len > 0 || dbgProperties.properties.length === 0) {
+        if (len > 0 || (dbgProperties.properties.length === 0 && !dbgProperties.metatable)) {
             dbgProperties.length = len;
         }
         send(dbgProperties);
@@ -628,7 +630,8 @@ namespace Debugger {
             if (!name) {
                 break;
             }
-            if (name.sub(1, 1) !== "(") {
+            const [invalidChar] = name.match("[^a-zA-Z0-9_]");
+            if (!invalidChar) {
                 locs[name] = {val, index, type: type(val)};
             }
         }
@@ -642,7 +645,8 @@ namespace Debugger {
             if (!name) {
                 break;
             }
-            let key = `_vararg_${-index}`;
+            [name] = name.gsub("[^a-zA-Z0-9_]+", "_");
+            let key = `${name}_${-index}`;
             while (locs[key]) {
                 key = key + "_";
             }
@@ -750,7 +754,12 @@ namespace Debugger {
         }
         const stack: debug.FunctionInfo[] = [];
         while (true) {
-            const stackInfo = thread && debug.getinfo(thread, i, "nSluf") || debug.getinfo(i, "nSluf");
+            let stackInfo: debug.FunctionInfo;
+            if (thread) {
+                stackInfo = debug.getinfo(thread, i, "nSluf");
+            } else {
+                stackInfo = debug.getinfo(i, "nSluf");
+            }
             if (!stackInfo) {
                 break;
             }
@@ -760,7 +769,7 @@ namespace Debugger {
         return stack;
     }
 
-    let breakAtDepth = 0;
+    let breakAtDepth = -1;
     let breakInThread: Thread | undefined;
 
     function debugBreak(activeThread: Thread, stackOffset: number) {
@@ -770,7 +779,7 @@ namespace Debugger {
         const activeThreadFrameOffset = stackOffset;
         const inactiveThreadFrameOffset = 0;
 
-        breakAtDepth = 0;
+        breakAtDepth = -1;
         breakInThread = undefined;
         let frameOffset = activeThreadFrameOffset;
         let frame = 0;
@@ -831,6 +840,9 @@ namespace Debugger {
                             currentStack = [{name: "unable to access main thread while running in a coroutine"}];
                         } else {
                             currentStack = getStack(newThread);
+                            if (currentStack.length === 0) {
+                                table.insert(currentStack, {name: "thread has not been started"});
+                            }
                         }
                         currentThread = newThread;
                         frame = 0;
@@ -853,7 +865,7 @@ namespace Debugger {
 
             } else if (inp === "stepin") {
                 breakAtDepth = math.huge;
-                breakInThread = activeThread;
+                breakInThread = undefined;
                 break;
 
             } else if (inp === "stepout") {
@@ -1035,9 +1047,16 @@ namespace Debugger {
         const activeThread = coroutine.running() || mainThread;
 
         //Stepping
-        if (breakAtDepth > 0) {
-            const activeStack = getStack(stackOffset);
-            if (activeStack.length <= breakAtDepth && (!breakInThread || activeThread === breakInThread)) {
+        if (breakAtDepth >= 0) {
+            let stepBreak: boolean;
+            if (!breakInThread) {
+                stepBreak = true;
+            } else if (activeThread === breakInThread) {
+                stepBreak = getStack(stackOffset).length <= breakAtDepth;
+            } else {
+                stepBreak = breakInThread !== mainThreadName && coroutine.status(breakInThread) === "dead";
+            }
+            if (stepBreak) {
                 Send.debugBreak("step", "step", assert(threadIds.get(activeThread)));
                 debugBreak(activeThread, stackOffset);
                 return;

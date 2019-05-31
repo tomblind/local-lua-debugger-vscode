@@ -357,9 +357,9 @@ export class LuaDebugSession extends LoggingDebugSession {
         await this.waitForMessage();
 
         const scopes: Scope[] = [
-            new Scope("Local", ScopeType.Local, false),
+            new Scope("Locals", ScopeType.Local, false),
             new Scope("Upvalues", ScopeType.Upvalue, false),
-            new Scope("Global", ScopeType.Global, false)
+            new Scope("Globals", ScopeType.Global, false)
         ];
         response.body = {scopes};
         this.sendResponse(response);
