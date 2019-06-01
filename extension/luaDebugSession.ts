@@ -390,8 +390,9 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         default:
             baseName = this.assert(this.variableHandles.get(args.variablesReference));
-            if (args.filter === "indexed") {
-                cmd = `elems ${baseName}`;
+            cmd = `props ${baseName}`;
+            if (args.filter !== undefined) {
+                cmd += ` ${args.filter}`;
                 if (args.start !== undefined) {
                     cmd += ` ${args.start}`;
                     if (args.count !== undefined) {
@@ -399,7 +400,7 @@ export class LuaDebugSession extends LoggingDebugSession {
                     }
                 }
             } else {
-                cmd = `props ${baseName}`;
+                cmd += " all";
             }
             this.showOutput(`variablesRequest ${baseName} start=${args.start},count=${args.count},filter=${args.filter}`, OutputCategory.Request);
             break;
@@ -593,7 +594,8 @@ export class LuaDebugSession extends LoggingDebugSession {
             variableName !== undefined ? variableName : (variable as LuaDebug.Variable).name,
             valueStr,
             ref,
-            variable.length
+            variable.length,
+            variable.type === "table" ? 1 : undefined
         );
     }
 
