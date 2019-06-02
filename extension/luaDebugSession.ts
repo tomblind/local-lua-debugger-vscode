@@ -402,7 +402,10 @@ export class LuaDebugSession extends LoggingDebugSession {
             } else {
                 cmd += " all";
             }
-            this.showOutput(`variablesRequest ${baseName} start=${args.start},count=${args.count},filter=${args.filter}`, OutputCategory.Request);
+            this.showOutput(
+                `variablesRequest ${baseName} ${args.filter} ${args.start}/${args.count}`,
+                OutputCategory.Request
+            );
             break;
         }
 

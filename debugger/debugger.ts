@@ -567,8 +567,16 @@ namespace Send {
         send(dbgBreakpoints);
     }
 
-    export function help(helpStrs: string[]) {
-        io.write(table.concat(helpStrs, "\n") + "\n");
+    export function help(helpStrs: [string, string][]) {
+        let nameLength = 0;
+        for (const [name] of helpStrs) {
+            nameLength = math.max(nameLength, name.length);
+        }
+        const builtStrs: string[] = [];
+        for (const [name, desc] of helpStrs) {
+            table.insert(builtStrs, `${name}${string.rep(" ", nameLength - name.length + 1)}: ${desc}`);
+        }
+        io.write(table.concat(builtStrs, "\n") + "\n");
     }
 }
 
@@ -823,28 +831,29 @@ namespace Debugger {
             } else if (inp === "help") {
                 Send.help(
                     [
-                        "help                                  : show available commands",
-                        "cont|continue                         : continue execution",
-                        "quit                                  : stop program and debugger",
-                        "step                                  : step to next line",
-                        "stepin                                : step in to current line",
-                        "stepout                               : step out to calling line",
-                        "stack                                 : show current stack trace",
-                        "frame n                               : set active stack frame",
-                        "locals                                : show all local variables available in current context",
-                        "ups                                   : show all upvalue variables available in the current context",
-                        "globals                               : show all global variables in current environment",
-                        "props [named|indexed] [start] [count] : show all properties of a table",
-                        "eval                                  : evaluate an expression in the current context",
-                        "exec                                  : execute a statement in the current context",
-                        "break set file.ext:n [cond]           : set a breakpoint",
-                        "break del|delete file.ext:n           : delete a breakpoint",
-                        "break en|enable file.ext:n            : enable a breakpoint",
-                        "break dis|disable file.ext:n          : disable a breakpoint",
-                        "break list                            : show all breakpoints",
-                        "break clear                           : delete all breakpoints",
-                        "threads                               : list active thread ids",
-                        "thread n                              : set current thread by id"
+                        ["help", "show available commands"],
+                        ["cont|continue", "continue execution"],
+                        ["quit", "stop program and debugger"],
+                        ["step", "step to next line"],
+                        ["stepin", "step in to current line"],
+                        ["stepout", "step out to calling line"],
+                        ["stack", "show current stack trace"],
+                        ["frame n", "set active stack frame"],
+                        ["locals", "show all local variables available in current context"],
+                        ["ups", "show all upvalue variables available in the current context"],
+                        ["globals", "show all global variables in current environment"],
+                        ["props indexed [start] [count]", "show array elements of a table"],
+                        ["props named|all", "show properties of a table"],
+                        ["eval", "evaluate an expression in the current context"],
+                        ["exec", "execute a statement in the current context"],
+                        ["break set file.ext:n [cond]", "set a breakpoint"],
+                        ["break del|delete file.ext:n", "delete a breakpoint"],
+                        ["break en|enable file.ext:n", "enable a breakpoint"],
+                        ["break dis|disable file.ext:n", "disable a breakpoint"],
+                        ["break list", "show all breakpoints"],
+                        ["break clear", "delete all breakpoints"],
+                        ["threads", "list active thread ids"],
+                        ["thread n", "set current thread by id"]
                     ]
                 );
 
