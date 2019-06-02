@@ -47,7 +47,7 @@ function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val i
 
 type Thread = LuaThread | typeof mainThreadName;
 
-const mainThreadName = "main thread" as const;
+const mainThreadName: "main thread" = "main thread";
 let mainThread: Thread;
 {
     const LUA_RIDX_MAINTHREAD = 1;
