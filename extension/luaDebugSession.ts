@@ -394,9 +394,11 @@ export class LuaDebugSession extends LoggingDebugSession {
             if (args.filter !== undefined) {
                 cmd += ` ${args.filter}`;
                 if (args.start !== undefined) {
-                    cmd += ` ${args.start}`;
+                    const start = Math.max(args.start, 1);
+                    cmd += ` ${start}`;
                     if (args.count !== undefined) {
-                        cmd += ` ${args.count}`;
+                        const count = args.start + args.count - start;
+                        cmd += ` ${count}`;
                     }
                 }
             } else {
@@ -597,7 +599,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             variableName !== undefined ? variableName : (variable as LuaDebug.Variable).name,
             valueStr,
             ref,
-            variable.length,
+            variable.length !== undefined && variable.length > 0 ? variable.length + 1 : variable.length,
             variable.type === "table" ? 1 : undefined
         );
     }

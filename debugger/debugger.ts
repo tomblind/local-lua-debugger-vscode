@@ -47,7 +47,7 @@ function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val i
 
 type Thread = LuaThread | typeof mainThreadName;
 
-const mainThreadName: "main thread" = "main thread";
+const mainThreadName = "main thread";
 let mainThread: Thread;
 {
     const LUA_RIDX_MAINTHREAD = 1;
@@ -530,9 +530,8 @@ namespace Send {
         if (kind === "indexed") {
             first = first || 1;
             const last = count && (first + count) || (first + (tbl as unknown[]).length);
-            first = math.max(first, 1);
             for (let i = first; i < last; ++i) {
-                const val = (tbl as unknown[])[i];
+                const val = (tbl as Record<string, unknown>)[i];
                 const name = getPrintableValue(i);
                 const dbgVar = buildVariable(name, val);
                 table.insert(dbgProperties.properties, dbgVar);
