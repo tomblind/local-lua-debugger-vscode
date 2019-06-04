@@ -192,7 +192,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         let processArgs: string[];
         if (isLuaProgramConfig(args.launch)) {
             processExecutable = `"${args.launch.lua}"`;
-            processArgs = ["-e", `"require('debugger').start([[${args.launch.file}]])"`];
+            processArgs = ["-e", `"require('debugger').runFile([[${args.launch.file}]], true)"`];
 
         } else {
             processExecutable = `"${args.launch.executable}"`;

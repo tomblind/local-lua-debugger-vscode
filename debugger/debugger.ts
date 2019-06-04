@@ -41,6 +41,8 @@ declare interface LuaTableIterable<K, V> extends Array<[K, V]> {}
 declare function pairs<K, V>(this: void, t: LuaTable<K, V>): LuaTableIterable<K, V>;
 declare function pairs<T extends object>(this: void, t: T): LuaPairsIterable<T>;
 
+_G.unpack = _G.unpack || (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack;
+
 function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val is LuaTypeMap[T] {
     return type(val) === luaTypeName;
 }
@@ -566,7 +568,7 @@ namespace Send {
         send(dbgBreakpoints);
     }
 
-    export function help(helpStrs: [string, string][]) {
+    export function help(...helpStrs: [string, string][]) {
         let nameLength = 0;
         for (const [name] of helpStrs) {
             nameLength = math.max(nameLength, name.length);
@@ -829,31 +831,29 @@ namespace Debugger {
 
             } else if (inp === "help") {
                 Send.help(
-                    [
-                        ["help", "show available commands"],
-                        ["cont|continue", "continue execution"],
-                        ["quit", "stop program and debugger"],
-                        ["step", "step to next line"],
-                        ["stepin", "step in to current line"],
-                        ["stepout", "step out to calling line"],
-                        ["stack", "show current stack trace"],
-                        ["frame n", "set active stack frame"],
-                        ["locals", "show all local variables available in current context"],
-                        ["ups", "show all upvalue variables available in the current context"],
-                        ["globals", "show all global variables in current environment"],
-                        ["props indexed [start] [count]", "show array elements of a table"],
-                        ["props named|all", "show properties of a table"],
-                        ["eval", "evaluate an expression in the current context"],
-                        ["exec", "execute a statement in the current context"],
-                        ["break set file.ext:n [cond]", "set a breakpoint"],
-                        ["break del|delete file.ext:n", "delete a breakpoint"],
-                        ["break en|enable file.ext:n", "enable a breakpoint"],
-                        ["break dis|disable file.ext:n", "disable a breakpoint"],
-                        ["break list", "show all breakpoints"],
-                        ["break clear", "delete all breakpoints"],
-                        ["threads", "list active thread ids"],
-                        ["thread n", "set current thread by id"]
-                    ]
+                    ["help", "show available commands"],
+                    ["cont|continue", "continue execution"],
+                    ["quit", "stop program and debugger"],
+                    ["step", "step to next line"],
+                    ["stepin", "step in to current line"],
+                    ["stepout", "step out to calling line"],
+                    ["stack", "show current stack trace"],
+                    ["frame n", "set active stack frame"],
+                    ["locals", "show all local variables available in current context"],
+                    ["ups", "show all upvalue variables available in the current context"],
+                    ["globals", "show all global variables in current environment"],
+                    ["props indexed [start] [count]", "show array elements of a table"],
+                    ["props named|all", "show properties of a table"],
+                    ["eval", "evaluate an expression in the current context"],
+                    ["exec", "execute a statement in the current context"],
+                    ["break set file.ext:n [cond]", "set a breakpoint"],
+                    ["break del|delete file.ext:n", "delete a breakpoint"],
+                    ["break en|enable file.ext:n", "enable a breakpoint"],
+                    ["break dis|disable file.ext:n", "disable a breakpoint"],
+                    ["break list", "show all breakpoints"],
+                    ["break clear", "delete all breakpoints"],
+                    ["threads", "list active thread ids"],
+                    ["thread n", "set current thread by id"]
                 );
 
             } else if (inp === "threads") {
@@ -1157,30 +1157,6 @@ namespace Debugger {
         }
     }
 
-    export function setHook() {
-        debug.sethook(debugHook, "l");
-
-        for (const [thread] of pairs(threadIds)) {
-            if (isType(thread, "thread") && coroutine.status(thread) !== "dead") {
-                debug.sethook(thread, debugHook, "l");
-            }
-        }
-    }
-
-    export function clearHook() {
-        debug.sethook();
-
-        for (const [thread] of pairs(threadIds)) {
-            if (isType(thread, "thread") && coroutine.status(thread) !== "dead") {
-                debug.sethook(thread);
-            }
-        }
-    }
-
-    export function triggerBreak() {
-        breakAtDepth = math.huge;
-    }
-
     //Convert source paths to mapped
     function mapSource(indent: string, file: string, lineStr: string, remainder: string) {
         const sourceMap = SourceMap.get(file);
@@ -1202,16 +1178,10 @@ namespace Debugger {
         return str;
     }
 
-    export function onError(err: unknown) {
-        const msg = mapSources(tostring(err));
-        const thread = coroutine.running() || mainThread;
-        Send.debugBreak(msg, "error", assert(threadIds.get(thread)));
-        debugBreak(thread, 2);
-    }
-
-    //Track coroutines
+    //coroutine.create replacement for hooking threads
     const luaCoroutineCreate = coroutine.create;
-    coroutine.create = (f: Function) => {
+
+    function debuggerCoroutineCreate(f: Function) {
         const thread = luaCoroutineCreate(f);
         threadIds.set(thread, nextThreadId);
         ++nextThreadId;
@@ -1220,26 +1190,152 @@ namespace Debugger {
             debug.sethook(thread, debugHook, "l");
         }
         return thread;
-    };
+    }
 
-    //Override debug.traceback
+    //debug.traceback replacement for catching errors
     const luaDebugTraceback = debug.traceback;
-    debug.traceback = (
+
+    let skipBreakInTraceback = false;
+
+    function debuggerTraceback(
         threadOrMessage?: LuaThread | string,
         messageOrLevel?: string | number,
         level?: number
-    ): string => {
+    ): string {
         let trace = luaDebugTraceback(threadOrMessage as LuaThread, messageOrLevel as string, level as number);
         if (trace) {
             trace = mapSources(trace);
         }
 
-        const thread = isType(threadOrMessage, "thread") && threadOrMessage || coroutine.running() || mainThread;
-        Send.debugBreak(trace || "error", "error", assert(threadIds.get(thread)));
-        debugBreak(thread, 3);
+        if (skipBreakInTraceback) {
+            skipBreakInTraceback = false;
+        } else {
+            const thread = isType(threadOrMessage, "thread") && threadOrMessage || coroutine.running() || mainThread;
+            Send.debugBreak(trace || "error", "error", assert(threadIds.get(thread)));
+            debugBreak(thread, 3);
+        }
 
         return trace;
-    };
+    }
+
+    //error replacement for catching errors
+    const luaError = error;
+
+    function debuggerError(message: string, level?: number) {
+        message = mapSources(message);
+        const thread = coroutine.running() || mainThread;
+        Send.debugBreak(message, "error", assert(threadIds.get(thread)));
+        debugBreak(thread, 2);
+        skipBreakInTraceback = true;
+        return luaError(message, level);
+    }
+
+    const luaAssert = assert;
+
+    /** @tupleReturn */
+    function debuggerAssert(v: unknown, ...args: unknown[]) {
+        if (!v) {
+            const message = args[0] !== undefined && mapSources(tostring(args[0])) || "assertion failed";
+            const thread = coroutine.running() || mainThread;
+            Send.debugBreak(message, "error", assert(threadIds.get(thread)));
+            debugBreak(thread, 2);
+            skipBreakInTraceback = true;
+            return luaError(message);
+        }
+        return [v, ...args];
+    }
+
+    let hookCount = 0;
+
+    export function pushHook() {
+        ++hookCount;
+        if (hookCount > 1) {
+            return;
+        }
+
+        coroutine.create = debuggerCoroutineCreate;
+        _G.error = debuggerError;
+        _G.assert = debuggerAssert;
+        debug.traceback = debuggerTraceback;
+
+        debug.sethook(debugHook, "l");
+
+        for (const [thread] of pairs(threadIds)) {
+            if (isType(thread, "thread") && coroutine.status(thread) !== "dead") {
+                debug.sethook(thread, debugHook, "l");
+            }
+        }
+    }
+
+    export function clearHook() {
+        hookCount = 0;
+
+        debug.sethook();
+
+        for (const [thread] of pairs(threadIds)) {
+            if (isType(thread, "thread") && coroutine.status(thread) !== "dead") {
+                debug.sethook(thread);
+            }
+        }
+
+        coroutine.create = luaCoroutineCreate;
+        _G.error = luaError;
+        _G.assert = luaAssert;
+        debug.traceback = luaDebugTraceback;
+    }
+
+    export function popHook() {
+        --hookCount;
+        if (hookCount === 0) {
+            clearHook();
+        }
+    }
+
+    export function triggerBreak() {
+        breakAtDepth = math.huge;
+    }
+
+    export function debugGlobal(breakImmediately?: boolean) {
+        Debugger.pushHook();
+
+        if (breakImmediately) {
+            Debugger.triggerBreak();
+        }
+    }
+
+    function onError(err: unknown) {
+        const msg = mapSources(tostring(err));
+        const thread = coroutine.running() || mainThread;
+        Send.debugBreak(msg, "error", assert(threadIds.get(thread)));
+        debugBreak(thread, 2);
+        Debugger.popHook();
+    }
+
+    /** @tupleReturn */
+    export interface Callable {
+        (this: void, ...args: unknown[]): unknown[];
+    }
+
+    /** @tupleReturn */
+    export function debugFunction(func: Callable, breakImmediately: boolean | undefined, args: unknown[]) {
+        Debugger.pushHook();
+
+        if (breakImmediately) {
+            Debugger.triggerBreak();
+        }
+
+        let results: unknown[] | undefined;
+
+        function runFunction() {
+            results = func(...args);
+            Debugger.popHook();
+        }
+
+        xpcall(runFunction, onError);
+        if (results) {
+            return results;
+        }
+    }
 }
 
 //Trigger a break at next executed line
@@ -1247,32 +1343,44 @@ export function requestBreak() {
     Debugger.triggerBreak();
 }
 
-//Stop debugger
+//Stop debugging currently debugged function
+export function finish() {
+    Debugger.popHook();
+}
+
+//Stop debugger completely
 export function stop() {
     Debugger.clearHook();
 }
 
-//Start debugger
-export function start(entryPoint?: string | { (this: void): void }, breakImmediately?: boolean) {
-    if (isType(entryPoint, "string")) {
-        [entryPoint] = assert(...loadfile(entryPoint));
-    }
+//Start debugger globally
+export function start(breakImmediately?: boolean) {
+    Debugger.debugGlobal(breakImmediately);
+}
 
-    Debugger.setHook();
-
-    if (breakImmediately !== false) {
-        Debugger.triggerBreak();
+//Load and debug the specified file
+/** @tupleReturn */
+export function runFile(filePath: unknown, breakImmediately?: boolean) {
+    if (!isType(filePath, "string")) {
+        throw `expected string as first argument to runFile, but got '${type(filePath)}'`;
     }
-
-    if (entryPoint !== undefined) {
-        xpcall(
-            () => {
-                (entryPoint as { (this: void): void })();
-                stop();
-            },
-            Debugger.onError
-        );
+    if (breakImmediately !== undefined && !isType(breakImmediately, "boolean")) {
+        throw `expected boolean as second argument to runFile, but got '${type(breakImmediately)}'`;
     }
+    const [func] = assert(...loadfile(filePath));
+    return Debugger.debugFunction(func as Debugger.Callable, breakImmediately, []);
+}
+
+//Call and debug the specified function
+/** @tupleReturn */
+export function call(func: unknown, breakImmediately?: boolean, ...args: unknown[]) {
+    if (!isType(func, "function")) {
+        throw `expected string as first argument to debugFile, but got '${type(func)}'`;
+    }
+    if (breakImmediately !== undefined && !isType(breakImmediately, "boolean")) {
+        throw `expected boolean as second argument to debugFunction, but got '${type(breakImmediately)}'`;
+    }
+    return Debugger.debugFunction(func as Debugger.Callable, breakImmediately, args);
 }
 
 //Don't buffer io
