@@ -586,7 +586,15 @@ namespace Debugger {
         [name: string]: unknown;
     }
 
+    /** @tupleReturn */
+    export interface DebuggableFunction {
+        (this: void, ...args: unknown[]): unknown[];
+    }
+
     const prompt = "";
+
+    let skipBreakInNextTraceback = false;
+    let debuggerDepth = 0;
 
     const threadIds = setmetatable(new LuaTable<Thread, number>(), {__mode: "k"});
     const mainThreadId = 1;
@@ -1195,8 +1203,6 @@ namespace Debugger {
     //debug.traceback replacement for catching errors
     const luaDebugTraceback = debug.traceback;
 
-    let skipBreakInTraceback = false;
-
     function debuggerTraceback(
         threadOrMessage?: LuaThread | string,
         messageOrLevel?: string | number,
@@ -1207,8 +1213,8 @@ namespace Debugger {
             trace = mapSources(trace);
         }
 
-        if (skipBreakInTraceback) {
-            skipBreakInTraceback = false;
+        if (skipBreakInNextTraceback) {
+            skipBreakInNextTraceback = false;
         } else {
             const thread = isType(threadOrMessage, "thread") && threadOrMessage || coroutine.running() || mainThread;
             Send.debugBreak(trace || "error", "error", assert(threadIds.get(thread)));
@@ -1226,7 +1232,7 @@ namespace Debugger {
         const thread = coroutine.running() || mainThread;
         Send.debugBreak(message, "error", assert(threadIds.get(thread)));
         debugBreak(thread, 2);
-        skipBreakInTraceback = true;
+        skipBreakInNextTraceback = true;
         return luaError(message, level);
     }
 
@@ -1239,17 +1245,15 @@ namespace Debugger {
             const thread = coroutine.running() || mainThread;
             Send.debugBreak(message, "error", assert(threadIds.get(thread)));
             debugBreak(thread, 2);
-            skipBreakInTraceback = true;
+            skipBreakInNextTraceback = true;
             return luaError(message);
         }
         return [v, ...args];
     }
 
-    let hookCount = 0;
-
     export function pushHook() {
-        ++hookCount;
-        if (hookCount > 1) {
+        ++debuggerDepth;
+        if (debuggerDepth > 1) {
             return;
         }
 
@@ -1268,7 +1272,7 @@ namespace Debugger {
     }
 
     export function clearHook() {
-        hookCount = 0;
+        debuggerDepth = 0;
 
         debug.sethook();
 
@@ -1285,8 +1289,8 @@ namespace Debugger {
     }
 
     export function popHook() {
-        --hookCount;
-        if (hookCount === 0) {
+        --debuggerDepth;
+        if (debuggerDepth === 0) {
             clearHook();
         }
     }
@@ -1311,36 +1315,32 @@ namespace Debugger {
         Debugger.popHook();
     }
 
-    /** @tupleReturn */
-    export interface Callable {
-        (this: void, ...args: unknown[]): unknown[];
+    function wrapFunction(func: DebuggableFunction, args: unknown[]) {
+        return () => {
+            const results = func(...args);
+            Debugger.popHook();
+            return results;
+        };
     }
 
     /** @tupleReturn */
-    export function debugFunction(func: Callable, breakImmediately: boolean | undefined, args: unknown[]) {
+    export function debugFunction(func: DebuggableFunction, breakImmediately: boolean | undefined, args: unknown[]) {
         Debugger.pushHook();
 
         if (breakImmediately) {
             Debugger.triggerBreak();
         }
 
-        let results: unknown[] | undefined;
-
-        function runFunction() {
-            results = func(...args);
-            Debugger.popHook();
-        }
-
-        xpcall(runFunction, onError);
-        if (results) {
+        const [success, results] = xpcall(wrapFunction(func, args), onError);
+        if (success) {
             return results;
         }
     }
 }
 
-//Trigger a break at next executed line
-export function requestBreak() {
-    Debugger.triggerBreak();
+//Start debugger globally
+export function start(breakImmediately?: boolean) {
+    Debugger.debugGlobal(breakImmediately);
 }
 
 //Stop debugging currently debugged function
@@ -1353,11 +1353,6 @@ export function stop() {
     Debugger.clearHook();
 }
 
-//Start debugger globally
-export function start(breakImmediately?: boolean) {
-    Debugger.debugGlobal(breakImmediately);
-}
-
 //Load and debug the specified file
 /** @tupleReturn */
 export function runFile(filePath: unknown, breakImmediately?: boolean) {
@@ -1368,7 +1363,7 @@ export function runFile(filePath: unknown, breakImmediately?: boolean) {
         throw `expected boolean as second argument to runFile, but got '${type(breakImmediately)}'`;
     }
     const [func] = assert(...loadfile(filePath));
-    return Debugger.debugFunction(func as Debugger.Callable, breakImmediately, []);
+    return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, []);
 }
 
 //Call and debug the specified function
@@ -1380,7 +1375,12 @@ export function call(func: unknown, breakImmediately?: boolean, ...args: unknown
     if (breakImmediately !== undefined && !isType(breakImmediately, "boolean")) {
         throw `expected boolean as second argument to debugFunction, but got '${type(breakImmediately)}'`;
     }
-    return Debugger.debugFunction(func as Debugger.Callable, breakImmediately, args);
+    return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, args);
+}
+
+//Trigger a break at next executed line
+export function requestBreak() {
+    Debugger.triggerBreak();
 }
 
 //Don't buffer io
