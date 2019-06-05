@@ -114,7 +114,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private isRunning = false;
 
     public constructor() {
-        super("lldv-log.txt");
+        super("lldebugger-log.txt");
     }
 
     protected initializeRequest(
@@ -192,7 +192,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         let processArgs: string[];
         if (isLuaProgramConfig(args.launch)) {
             processExecutable = `"${args.launch.lua}"`;
-            processArgs = ["-e", `"require('debugger').runFile([[${args.launch.file}]], true)"`];
+            processArgs = ["-e", `"require('lldebugger').runFile([[${args.launch.file}]], true)"`];
 
         } else {
             processExecutable = `"${args.launch.executable}"`;

@@ -593,6 +593,7 @@ namespace Debugger {
     }
 
     const prompt = "";
+    const debuggerName = "lldebugger.lua";
 
     let skipBreakInNextTraceback = false;
     let debuggerDepth = 0;
@@ -1105,7 +1106,7 @@ namespace Debugger {
 
         //Ignore debugger code
         const topFrame = debug.getinfo(stackOffset, "nSluf");
-        if (!topFrame || !topFrame.source || topFrame.source.sub(-12) === "debugger.lua") {
+        if (!topFrame || !topFrame.source || topFrame.source.sub(-debuggerName.length) === debuggerName) {
             return;
         }
 
