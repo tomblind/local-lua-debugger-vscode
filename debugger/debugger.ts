@@ -570,11 +570,12 @@ namespace Send {
 
     export function help(...helpStrs: [string, string][]) {
         let nameLength = 0;
-        for (const [name] of helpStrs) {
-            nameLength = math.max(nameLength, name.length);
+        for (const [_, nameAndDesc] of ipairs(helpStrs)) {
+            nameLength = math.max(nameLength, nameAndDesc[1].length);
         }
         const builtStrs: string[] = [];
-        for (const [name, desc] of helpStrs) {
+        for (const [_, nameAndDesc] of ipairs(helpStrs)) {
+            const [name, desc] = nameAndDesc;
             table.insert(builtStrs, `${name}${string.rep(" ", nameLength - name.length + 1)}: ${desc}`);
         }
         io.write(table.concat(builtStrs, "\n") + "\n");
@@ -1083,6 +1084,22 @@ namespace Debugger {
         }
     }
 
+    function checkBreakpoint(breakpoint: LuaDebug.Breakpoint, file: string, line: number, sourceMap?: SourceMap) {
+        if (breakpoint.line === line && comparePaths(breakpoint.file, file)) {
+            return true;
+        }
+        if (sourceMap) {
+            const lineMapping = sourceMap[line];
+            if (lineMapping && lineMapping.sourceLine === line) {
+                const sourceMapFile = sourceMap.sources[lineMapping.sourceIndex];
+                if (sourceMapFile) {
+                    return comparePaths(breakpoint.file, sourceMapFile);
+                }
+            }
+        }
+        return false;
+    }
+
     function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
         const stackOffset = 2;
 
@@ -1102,7 +1119,7 @@ namespace Debugger {
             } else if (activeThread === breakInThread) {
                 stepBreak = getStack(stackOffset).length <= breakAtDepth;
             } else {
-                stepBreak = breakInThread !== mainThreadName && coroutine.status(breakInThread) === "dead";
+                stepBreak = breakInThread !== mainThread && coroutine.status(breakInThread as LuaThread) === "dead";
             }
             if (stepBreak) {
                 Send.debugBreak("step", "step", assert(threadIds.get(activeThread)));
@@ -1119,49 +1136,31 @@ namespace Debugger {
 
         const source = Path.format(assert(topFrame.source));
         const sourceMap = SourceMap.get(source);
-        let sourceMapFile: string | undefined;
-        let lineMapping: SourceLineMapping | undefined;
-        if (sourceMap) {
-            lineMapping = sourceMap[topFrame.currentline];
-            if (lineMapping) {
-                sourceMapFile = sourceMap.sources[lineMapping.sourceIndex];
-            }
-        }
-
-        let hitBreakpoint: LuaDebug.Breakpoint | undefined;
-        for (let i = 0; i < breakpoints.length && !hitBreakpoint; ++i) {
-            const breakpoint = breakpoints[i];
-            if (breakpoint.enabled) {
-                if (
-                    (
-                        breakpoint.line === topFrame.currentline
-                        && comparePaths(breakpoint.file, source)
-                    )
-                    || (
-                        sourceMapFile
-                        && breakpoint.line === (lineMapping as SourceLineMapping).sourceLine
-                        && comparePaths(breakpoint.file, sourceMapFile)
-                    )
-                ) {
-                    if (breakpoint.condition) {
-                        const condition = "return " + breakpoint.condition;
-                        const [success, result] = execute(condition, activeThread, 0, stackOffset, topFrame);
-                        if (success && result) {
-                            hitBreakpoint = breakpoint;
-                        }
-                    } else {
-                        hitBreakpoint = breakpoint;
+        for (const breakpoint of breakpoints) {
+            if (breakpoint.enabled && checkBreakpoint(breakpoint, source, topFrame.currentline, sourceMap)) {
+                if (breakpoint.condition) {
+                    const condition = "return " + breakpoint.condition;
+                    const [success, result] = execute(condition, activeThread, 0, stackOffset, topFrame);
+                    if (success && result) {
+                        const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
+                        Send.debugBreak(
+                            `breakpoint hit: "${breakpoint.file}:${breakpoint.line}", ${conditionDisplay}`,
+                            "breakpoint",
+                            assert(threadIds.get(activeThread))
+                        );
+                        debugBreak(activeThread, stackOffset);
+                        break;
                     }
+                } else {
+                    Send.debugBreak(
+                        `breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`,
+                        "breakpoint",
+                        assert(threadIds.get(activeThread))
+                    );
+                    debugBreak(activeThread, stackOffset);
+                    break;
                 }
             }
-        }
-        if (hitBreakpoint) {
-            Send.debugBreak(
-                `breakpoint hit: "${hitBreakpoint.file}:${hitBreakpoint.line}"`,
-                "breakpoint",
-                assert(threadIds.get(activeThread))
-            );
-            debugBreak(activeThread, stackOffset);
         }
     }
 
