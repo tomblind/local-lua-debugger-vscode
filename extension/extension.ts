@@ -36,8 +36,8 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
         }
 
         // Pass extension path to debugger
-        const extension = vscode.extensions.getExtension("tom-blind.local-lua-debugger-vscode");
-        config.extensionPath = extension !== undefined ? `${extension.extensionPath}/out` : ".";
+        const extension = vscode.extensions.getExtension("tomblind.local-lua-debugger-vscode");
+        config.extensionPath = extension !== undefined ? extension.extensionPath : ".";
 
         return config;
     }
@@ -73,12 +73,12 @@ if (enableServer) {
 
 export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
-        vscode.debug.registerDebugConfigurationProvider("local-lua-debugger", configurationProvider)
+        vscode.debug.registerDebugConfigurationProvider("lua-local", configurationProvider)
     );
 
     if (debugAdapaterDescriptorFactory !== undefined) {
         context.subscriptions.push(
-            vscode.debug.registerDebugAdapterDescriptorFactory("local-lua-debugger", debugAdapaterDescriptorFactory)
+            vscode.debug.registerDebugAdapterDescriptorFactory("lua-local", debugAdapaterDescriptorFactory)
         );
         context.subscriptions.push(debugAdapaterDescriptorFactory);
     }

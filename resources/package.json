@@ -1,0 +1,140 @@
+{
+    "name": "local-lua-debugger-vscode",
+    "publisher": "tomblind",
+    "version": "0.1.0",
+    "description": "Local Lua Debugger VSCode Extension",
+    "displayName": "Local Lua Debugger",
+    "icon": "resources/Lua-Logo_128x128.png",
+    "repository": {
+        "type": "github",
+        "url": "https://github.com/tomblind/local-lua-debugger-vscode.git"
+    },
+    "author": "tomb@noreply.github.com",
+    "license": "MIT",
+    "categories": [
+        "Debuggers"
+    ],
+    "keywords": [
+        "lua",
+        "tstl",
+        "typescripttolua",
+        "typescript-to-lua"
+    ],
+    "dependencies": {
+        "vscode-debugadapter": "^1.35.0"
+    },
+    "main": "./extension",
+    "engines": {
+        "vscode": "^1.34.0"
+    },
+    "activationEvents": [
+        "onDebug"
+    ],
+    "contributes": {
+        "breakpoints": [
+            {
+                "language": "lua"
+            }
+        ],
+        "debuggers": [
+            {
+                "type": "lua-local",
+                "label": "Local Lua Debugger",
+                "program": "./debugAdapter.js",
+                "runtime": "node",
+                "configurationAttributes": {
+                    "launch": {
+                        "properties": {
+                            "sourceRoot": {
+                                "type": "string",
+                                "description": "Root path of source mapped files."
+                            },
+                            "verbose": {
+                                "type": "boolean",
+                                "description": "Enable verbose output.",
+                                "default": false
+                            },
+                            "breakOnAttach": {
+                                "type": "boolean",
+                                "description": "Pause debugging as soon as debugger attaches to program.",
+                                "default": false
+                            },
+                            "launch": {
+                                "oneOf": [
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "lua": {
+                                                "type": "string",
+                                                "description": "The lua executable to use.",
+                                                "default": "lua"
+                                            },
+                                            "file": {
+                                                "type": "string",
+                                                "description": "The file to pass to lua to start the program.",
+                                                "default": "${file}"
+                                            },
+                                            "cwd": {
+                                                "type": "string",
+                                                "description": "Working directory to launch lua in.",
+                                                "default": "${workspaceFolder}"
+                                            },
+                                            "env": {
+                                                "type": "object",
+                                                "description": "Environment variables to set.",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        },
+                                        "required": [
+                                            "file",
+                                            "lua"
+                                        ],
+                                        "additionalProperties": false
+                                    },
+                                    {
+                                        "type": "object",
+                                        "properties": {
+                                            "executable": {
+                                                "type": "string",
+                                                "description": "The executable to run."
+                                            },
+                                            "args": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string"
+                                                },
+                                                "description": "Arguments to pass to the executable.",
+                                                "default": []
+                                            },
+                                            "cwd": {
+                                                "type": "string",
+                                                "description": "Working directory to launch the executable in.",
+                                                "default": "${workspaceFolder}"
+                                            },
+                                            "env": {
+                                                "type": "object",
+                                                "description": "Environment variables to set.",
+                                                "additionalProperties": {
+                                                    "type": "string"
+                                                }
+                                            }
+                                        },
+                                        "required": [
+                                            "executable"
+                                        ],
+                                        "additionalProperties": false
+                                    }
+                                ]
+                            }
+                        },
+                        "require": [
+                            "launch"
+                        ]
+                    }
+                }
+            }
+        ]
+    }
+}

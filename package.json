@@ -1,14 +1,16 @@
 {
-    "name": "local-lua-debugger-vscode",
-    "publisher": "tom-blind",
+    "name": "local-lua-debugger-vscode-source",
     "version": "0.1.0",
-    "description": "Local Lua Debugger VSCode Extension",
+    "description": "Local Lua Debugger VSCode Extension (source)",
     "scripts": {
         "build-debugger": "tstl -p debugger",
-        "build-extension": "tsc -p extension",
+        "build-extension": "tsc -p extension && cp resources/* out",
         "build": "npm run build-debugger && npm run build-extension",
-        "clean:win": "if exist out rmdir /S /Q out",
-        "clean:bash": "rm -rf out"
+        "clean": "rm -rf out"
+    },
+    "repository": {
+        "type": "github",
+        "url": "https://github.com/tomblind/local-lua-debugger-vscode.git"
     },
     "author": "tomb@noreply.github.com",
     "license": "MIT",
@@ -22,120 +24,5 @@
     },
     "dependencies": {
         "vscode-debugadapter": "^1.35.0"
-    },
-    "main": "./out/extension",
-    "engines": {
-        "vscode": "^1.30.0-insider",
-        "node": "^8.9.3"
-    },
-    "activationEvents": [
-        "onDebug"
-    ],
-    "contributes": {
-        "breakpoints": [
-            {
-                "language": "lua"
-            }
-        ],
-        "debuggers": [
-            {
-                "type": "local-lua-debugger",
-                "label": "Local Lua Debugger",
-                "program": "./out/debugAdapter.js",
-                "runtime": "node",
-                "configurationAttributes": {
-                    "launch": {
-                        "properties": {
-                            "sourceRoot": {
-                                "type": "string",
-                                "description": "Root path of source mapped files."
-                            },
-                            "verbose": {
-                                "type": "boolean",
-                                "description": "Enable verbose output.",
-                                "default": false
-                            },
-                            "breakOnAttach": {
-                                "type": "boolean",
-                                "description": "Pause debugging as soon as debugger attaches to program.",
-                                "default": false
-                            },
-                            "launch": {
-                                "oneOf": [
-                                    {
-                                        "type": "object",
-                                        "properties": {
-                                            "lua": {
-                                                "type": "string",
-                                                "description": "The Lua executable to use.",
-                                                "default": "lua"
-                                            },
-                                            "file": {
-                                                "type": "string",
-                                                "description": "The lua file to pass to lua to start the program.",
-                                                "default": "${file}"
-                                            },
-                                            "cwd": {
-                                                "type": "string",
-                                                "description": "Working directory to launch lua/executable in.",
-                                                "default": "${workspaceFolder}"
-                                            },
-                                            "env": {
-                                                "type": "object",
-                                                "description": "Environment variables to set.",
-                                                "additionalProperties": {
-                                                    "type": "string"
-                                                }
-                                            }
-                                        },
-                                        "required": [
-                                            "file",
-                                            "lua"
-                                        ],
-                                        "additionalProperties": false
-                                    },
-                                    {
-                                        "type": "object",
-                                        "properties": {
-                                            "executable": {
-                                                "type": "string",
-                                                "description": "The custom executable to run."
-                                            },
-                                            "args": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "string"
-                                                },
-                                                "description": "Arguments to pass to the custom executable.",
-                                                "default": []
-                                            },
-                                            "cwd": {
-                                                "type": "string",
-                                                "description": "Working directory to launch lua/executable in.",
-                                                "default": "${workspaceFolder}"
-                                            },
-                                            "env": {
-                                                "type": "object",
-                                                "description": "Environment variables to set.",
-                                                "additionalProperties": {
-                                                    "type": "string"
-                                                }
-                                            }
-                                        },
-                                        "required": [
-                                            "executable"
-                                        ],
-                                        "additionalProperties": false
-                                    }
-                                ]
-                            }
-                        },
-                        "require": [
-                            "launch"
-                        ]
-                    }
-                }
-            }
-        ]
     }
 }
