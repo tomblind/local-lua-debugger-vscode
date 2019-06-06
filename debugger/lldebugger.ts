@@ -1339,7 +1339,7 @@ namespace Debugger {
 }
 
 //Start debugger globally
-export function start(breakImmediately?: boolean) {
+export function start(breakImmediately = true) {
     Debugger.debugGlobal(breakImmediately);
 }
 
