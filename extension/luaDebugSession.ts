@@ -68,6 +68,7 @@ const mainThreadId = 1;
 const maxStackCount = 100;
 const metatableDisplayName = "[[metatable]]";
 const tableLengthDisplayName = "[[length]]";
+const envVariable = "LOCAL_LUA_DEBUGGER_VSCODE";
 
 function getEnvKey(env: NodeJS.ProcessEnv, searchKey: string) {
     const upperSearchKey = searchKey.toUpperCase();
@@ -199,6 +200,9 @@ export class LuaDebugSession extends LoggingDebugSession {
                 processOptions.env[envKey] = args.launch.env[key];
             }
         }
+
+        //Set an environment variable so the debugger can detect the attached extension
+        processOptions.env[envVariable] = "1";
 
         //Append lua path so it can find debugger script
         const luaPathKey = getEnvKey(processOptions.env, "LUA_PATH");

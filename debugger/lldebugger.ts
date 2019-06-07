@@ -1363,7 +1363,8 @@ namespace Debugger {
 }
 
 //Start debugger globally
-export function start(breakImmediately = true) {
+export function start(breakImmediately?: boolean) {
+    breakImmediately = breakImmediately || os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") === "1";
     Debugger.debugGlobal(breakImmediately);
 }
 
