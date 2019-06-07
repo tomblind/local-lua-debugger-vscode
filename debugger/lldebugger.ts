@@ -1,5 +1,24 @@
 /** @noSelfInFile */
 
+/** @luaTable */
+declare class LuaTable<K, V> {
+    public readonly length: number;
+    public get(key: K): V | undefined;
+    public set(key: K, value: V | undefined): void;
+}
+
+/** @luaIterator @tupleReturn */
+declare interface LuaTableIterable<K, V> extends Array<[K, V]> {}
+
+declare function pairs<K, V>(this: void, t: LuaTable<K, V>): LuaTableIterable<K, V>;
+declare function pairs<T extends object>(this: void, t: T): LuaPairsIterable<T>;
+
+/** @forRange */
+declare function forRange(start: number, limit: number, step?: number): number[];
+
+//Enure destructuring works in all lua versions
+_G.unpack = _G.unpack || (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack;
+
 interface Var {
     val: unknown;
     type: string;
@@ -17,34 +36,8 @@ interface Locals {
     [name: string]: Local;
 }
 
-interface LuaTypeMap {
-    nil: undefined;
-    number: number;
-    string: string;
-    boolean: boolean;
-    table: object;
-    function: Function;
-    thread: LuaThread;
-    userdata: LuaUserData;
-}
-
-/** @luaTable */
-declare class LuaTable<K, V> {
-    public readonly length: number;
-    public get(key: K): V | undefined;
-    public set(key: K, value: V | undefined): void;
-}
-
-/** @luaIterator @tupleReturn */
-declare interface LuaTableIterable<K, V> extends Array<[K, V]> {}
-
-declare function pairs<K, V>(this: void, t: LuaTable<K, V>): LuaTableIterable<K, V>;
-declare function pairs<T extends object>(this: void, t: T): LuaPairsIterable<T>;
-
-_G.unpack = _G.unpack || (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack;
-
-function isType<T extends keyof LuaTypeMap>(val: unknown, luaTypeName: T): val is LuaTypeMap[T] {
-    return type(val) === luaTypeName;
+function isThread(val: unknown): val is LuaThread {
+    return type(val) === "thread";
 }
 
 type Thread = LuaThread | typeof mainThreadName;
@@ -54,7 +47,7 @@ let mainThread: Thread;
 {
     const LUA_RIDX_MAINTHREAD = 1;
     const registryMainThread = debug.getregistry()[LUA_RIDX_MAINTHREAD];
-    mainThread = isType(registryMainThread, "thread") && registryMainThread || mainThreadName;
+    mainThread = isThread(registryMainThread) && registryMainThread || mainThreadName;
 }
 
 namespace Path {
@@ -195,14 +188,14 @@ namespace SourceMap
         const bits: boolean[] = [];
         for (const [c] of input.gmatch(".")) {
             let sextet = assert(base64Lookup[c]);
-            for (let i = 0; i < 6; ++i) {
+            for (const i of forRange(1, 6)) {
                 const bit = sextet % 2 !== 0;
-                table.insert(bits, i + 1, bit);
+                table.insert(bits, i, bit);
                 sextet = math.floor(sextet / 2);
             }
             if (bits.length >= 8) {
                 let value = 0;
-                for (let i = 7; i >= 0; --i) {
+                for (const i of forRange(7, 0, -1)) {
                     const bit = table.remove(bits);
                     if (bit === true) {
                         value += (2 ** i);
@@ -219,7 +212,7 @@ namespace SourceMap
         let bits: boolean[] = [];
         for (const [c] of input.gmatch(".")) {
             let sextet = assert(base64Lookup[c]);
-            for (let i = 0; i < 5; ++i) {
+            for (const _ of forRange(1, 5)) {
                 const bit = sextet % 2 !== 0;
                 table.insert(bits, bit);
                 sextet = math.floor(sextet / 2);
@@ -227,7 +220,7 @@ namespace SourceMap
             const continueBit = sextet % 2 !== 0;
             if (!continueBit) {
                 let value = 0;
-                for (let i = 1; i < bits.length; ++i) {
+                for (const i of forRange(1, bits.length - 1)) {
                     if (bits[i]) {
                         value += (2 ** (i - 1));
                     }
@@ -285,7 +278,7 @@ namespace SourceMap
         // let s = "";
         // for (const [l, m] of pairs(sourceMap)) {
         //     const mapping = m as unknown as SourceLineMapping;
-        //     if (isType(l, "number")) {
+        //     if (typeof l === "number") {
         //         s += `${l} -> ${sourceMap.sources[mapping.sourceIndex]}:${mapping.sourceLine}:${mapping.sourceColumn}\n`;
         //     }
         // }
@@ -381,7 +374,7 @@ namespace Format {
         }
 
         for (const [k] of pairs(val as object)) {
-            if (!isType(k, "number") || k > len) {
+            if (typeof k !== "number" || k > len) {
                 return false;
             }
         }
@@ -436,7 +429,7 @@ namespace Send {
     }
 
     function isElementKey(tbl: object, key: unknown) {
-        return isType(key, "number") && key >= 1 && key <= (tbl as unknown[]).length;
+        return typeof key === "number" && key >= 1 && key <= (tbl as unknown[]).length;
     }
 
     function buildVariable(name: string, value: unknown) {
@@ -446,7 +439,7 @@ namespace Send {
             value: getPrintableValue(value)
         };
 
-        if (isType(value, "table")) {
+        if (typeof value === "object") {
             dbgVar.length = (value as unknown[]).length;
         }
 
@@ -531,8 +524,8 @@ namespace Send {
         };
         if (kind === "indexed") {
             first = first || 1;
-            const last = count && (first + count) || (first + (tbl as unknown[]).length);
-            for (let i = first; i < last; ++i) {
+            const last = count && (first + count - 1) || (first + (tbl as unknown[]).length - 1);
+            for (const i of forRange(first, last)) {
                 const val = (tbl as Record<string, unknown>)[i];
                 const name = getPrintableValue(i);
                 const dbgVar = buildVariable(name, val);
@@ -629,7 +622,7 @@ namespace Debugger {
 
     function backtrace(stack: debug.FunctionInfo[], frameIndex: number) {
         const frames: LuaDebug.Frame[] = [];
-        for (let i = 0; i < stack.length; ++i) {
+        for (const i of forRange(0, stack.length - 1)) {
             const info = stack[i];
             const frame: LuaDebug.Frame = {
                 source: info.source && Path.format(info.source) || "?",
@@ -662,15 +655,16 @@ namespace Debugger {
     function getLocals(level: number, thread: Thread): Locals {
         const locs: Locals = {};
 
-        if (coroutine.running() !== undefined && !isType(thread, "thread")) {
+        if (coroutine.running() !== undefined && !isThread(thread)) {
             return locs; // Accessing locals for main thread, but we're in a coroutine right now
         }
 
         let name: string | undefined;
         let val: unknown;
 
-        for (let index = 1; ; ++index) {
-            if (isType(thread, "thread")) {
+        let index = 1;
+        while (true) {
+            if (isThread(thread)) {
                 [name, val] = debug.getlocal(thread, level, index);
             } else {
                 [name, val] = debug.getlocal(level, index);
@@ -678,14 +672,18 @@ namespace Debugger {
             if (!name) {
                 break;
             }
+
             const [invalidChar] = name.match("[^a-zA-Z0-9_]");
             if (!invalidChar) {
                 locs[name] = {val, index, type: type(val)};
             }
+
+            ++index;
         }
 
-        for (let index = -1; ; --index) {
-            if (isType(thread, "thread")) {
+        index = -1;
+        while (true) {
+            if (isThread(thread)) {
                 [name, val] = debug.getlocal(thread, level, index);
             } else {
                 [name, val] = debug.getlocal(level, index);
@@ -693,12 +691,15 @@ namespace Debugger {
             if (!name) {
                 break;
             }
+
             [name] = name.gsub("[^a-zA-Z0-9_]+", "_");
             let key = `${name}_${-index}`;
             while (locs[key]) {
                 key = key + "_";
             }
             locs[key] = {val, index, type: type(val)};
+
+            --index;
         }
 
         return locs;
@@ -709,7 +710,7 @@ namespace Debugger {
 
         info.nups = assert(info.nups);
         info.func = assert(info.func);
-        for (let index = 1; index <= info.nups; ++index) {
+        for (const index of forRange(1, info.nups)) {
             const [name, val] = debug.getupvalue(info.func, index);
             ups[assert(name)] = {val, index, type: type(val)};
         }
@@ -735,7 +736,7 @@ namespace Debugger {
         info: debug.FunctionInfo
     ): [true, unknown] | [false, string] {
         const activeThread = coroutine.running();
-        if (activeThread && !isType(thread, "thread")) {
+        if (activeThread && !isThread(thread)) {
             return [false, "unable to access main thread while running in a coroutine"];
         }
 
@@ -773,7 +774,7 @@ namespace Debugger {
         const [success, result] = pcall(func);
         if (success) {
             for (const [_, loc] of pairs(locs)) {
-                if (isType(thread, "thread")) {
+                if (isThread(thread)) {
                     debug.setlocal(thread, level, loc.index, loc.val);
                 } else {
                     debug.setlocal(level, loc.index, loc.val);
@@ -795,7 +796,7 @@ namespace Debugger {
     function getStack(threadOrOffset: LuaThread | number) {
         let thread: LuaThread | undefined;
         let i = 1;
-        if (isType(threadOrOffset, "thread")) {
+        if (isThread(threadOrOffset)) {
             thread = threadOrOffset;
         } else {
             i += threadOrOffset;
@@ -1043,8 +1044,8 @@ namespace Debugger {
                 } else {
                     const [s, r] = execute("return " + expression, currentThread, frame, frameOffset, info);
                     if (s) {
-                        if (isType(r, "table")) {
-                            Send.props(r, kind, tonumber(first), tonumber(count));
+                        if (typeof r === "object") {
+                            Send.props(r as object, kind, tonumber(first), tonumber(count));
                         } else {
                             Send.error(`Expression "${expression}" is not a table`);
                         }
@@ -1216,7 +1217,7 @@ namespace Debugger {
         if (skipBreakInNextTraceback) {
             skipBreakInNextTraceback = false;
         } else {
-            const thread = isType(threadOrMessage, "thread") && threadOrMessage || coroutine.running() || mainThread;
+            const thread = isThread(threadOrMessage) && threadOrMessage || coroutine.running() || mainThread;
             Send.debugBreak(trace || "error", "error", assert(threadIds.get(thread)));
             debugBreak(thread, 3);
         }
@@ -1265,7 +1266,7 @@ namespace Debugger {
         debug.sethook(debugHook, "l");
 
         for (const [thread] of pairs(threadIds)) {
-            if (isType(thread, "thread") && coroutine.status(thread) !== "dead") {
+            if (isThread(thread) && coroutine.status(thread) !== "dead") {
                 debug.sethook(thread, debugHook, "l");
             }
         }
@@ -1277,7 +1278,7 @@ namespace Debugger {
         debug.sethook();
 
         for (const [thread] of pairs(threadIds)) {
-            if (isType(thread, "thread") && coroutine.status(thread) !== "dead") {
+            if (isThread(thread) && coroutine.status(thread) !== "dead") {
                 debug.sethook(thread);
             }
         }
@@ -1356,10 +1357,10 @@ export function stop() {
 //Load and debug the specified file
 /** @tupleReturn */
 export function runFile(filePath: unknown, breakImmediately?: boolean) {
-    if (!isType(filePath, "string")) {
+    if (typeof filePath !== "string") {
         throw `expected string as first argument to runFile, but got '${type(filePath)}'`;
     }
-    if (breakImmediately !== undefined && !isType(breakImmediately, "boolean")) {
+    if (breakImmediately !== undefined && typeof breakImmediately !== "boolean") {
         throw `expected boolean as second argument to runFile, but got '${type(breakImmediately)}'`;
     }
     const [func] = assert(...loadfile(filePath));
@@ -1369,10 +1370,10 @@ export function runFile(filePath: unknown, breakImmediately?: boolean) {
 //Call and debug the specified function
 /** @tupleReturn */
 export function call(func: unknown, breakImmediately?: boolean, ...args: unknown[]) {
-    if (!isType(func, "function")) {
+    if (typeof func !== "function") {
         throw `expected string as first argument to debugFile, but got '${type(func)}'`;
     }
-    if (breakImmediately !== undefined && !isType(breakImmediately, "boolean")) {
+    if (breakImmediately !== undefined && typeof breakImmediately !== "boolean") {
         throw `expected boolean as second argument to debugFunction, but got '${type(breakImmediately)}'`;
     }
     return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, args);
