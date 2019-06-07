@@ -4,8 +4,10 @@
     "description": "Local Lua Debugger VSCode Extension (source)",
     "scripts": {
         "build-debugger": "tstl -p debugger",
-        "build-extension": "tsc -p extension && cp resources/* out",
+        "build-extension": "tsc -p extension",
         "build": "npm run build-debugger && npm run build-extension",
+        "bundle": "npm run clean && npm run build && cp resources/* out && cd out && npm install && vsce package",
+        "publish": "npm run bundle && vsce publish",
         "clean": "rm -rf out"
     },
     "repository": {
@@ -20,6 +22,7 @@
         "tslint-eslint-rules": "^5.4.0",
         "typescript": "^3.5.1",
         "typescript-to-lua": "^0.21.1",
+        "vsce": "^1.62.0",
         "vscode": "^1.1.33"
     },
     "dependencies": {

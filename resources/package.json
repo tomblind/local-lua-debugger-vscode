@@ -4,7 +4,7 @@
     "version": "0.1.0",
     "description": "Local Lua Debugger VSCode Extension",
     "displayName": "Local Lua Debugger",
-    "icon": "resources/Lua-Logo_128x128.png",
+    "icon": "Lua-Logo_128x128.png",
     "repository": {
         "type": "github",
         "url": "https://github.com/tomblind/local-lua-debugger-vscode.git"
