@@ -43,15 +43,14 @@ function isThread(val: unknown): val is LuaThread {
 type Thread = LuaThread | typeof mainThreadName;
 
 const mainThreadName = "main thread";
-let mainThread: Thread;
-{
+const mainThread = (() => {
     const LUA_RIDX_MAINTHREAD = 1;
     const registryMainThread = debug.getregistry()[LUA_RIDX_MAINTHREAD];
-    mainThread = isThread(registryMainThread) && registryMainThread || mainThreadName;
-}
+    return isThread(registryMainThread) && registryMainThread || mainThreadName;
+})();
 
 namespace Path {
-    export const separator = (function() {
+    export const separator = (() => {
         const config = (_G.package as typeof _G["package"] & Record<"config", string>).config;
         if (config) {
             const [sep] = config.match("^[^\n]+");
@@ -197,7 +196,7 @@ namespace SourceMap
                 let value = 0;
                 for (const i of forRange(7, 0, -1)) {
                     const bit = table.remove(bits);
-                    if (bit === true) {
+                    if (bit) {
                         value += (2 ** i);
                     }
                 }
@@ -788,7 +787,9 @@ namespace Debugger {
     }
 
     function getInput() {
-        io.write(prompt);
+        if (prompt.length > 0) {
+            io.write(prompt);
+        }
         const inp = io.read("*l");
         return inp;
     }
@@ -837,7 +838,10 @@ namespace Debugger {
         let info = assert(currentStack[frame]);
         while (true) {
             const inp = getInput();
-            if (inp === "cont" || inp === "continue") {
+            if (!inp || inp === "quit") {
+                os.exit(0);
+
+            } else if (inp === "cont" || inp === "continue") {
                 break;
 
             } else if (inp === "help") {
@@ -920,9 +924,6 @@ namespace Debugger {
                 breakAtDepth = activeStack.length - 1;
                 breakInThread = activeThread;
                 break;
-
-            } else if (inp === "quit") {
-                os.exit(0);
 
             } else if (inp === "stack") {
                 backtrace(currentStack, frame);
