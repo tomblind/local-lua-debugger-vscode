@@ -9,7 +9,7 @@
         "type": "github",
         "url": "https://github.com/tomblind/local-lua-debugger-vscode.git"
     },
-    "author": "tomb@noreply.github.com",
+    "author": "tomblind@users.noreply.github.com",
     "license": "MIT",
     "categories": [
         "Debuggers"
