@@ -57,17 +57,24 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 ## Requirements & Limitations
 - The Lua environment must support communication via stdio.
   - Some enviroments may require command line options to support this.
-  - e.g. the Corona Simulator requires the `/no-console` flag.
+  - Ex. the Corona Simulator requires the `/no-console` flag.
 - The Lua environment must be built with the `debug` library, and no other code should attempt to set debug hooks.
 - You cannot pause debugging while the program is running.
 - In Lua 5.1 and LuaJit, the main thread cannot be accessed while stopped inside of a coroutine.
 - Most custom enviroments do not support breaking on runtime errors.
   - The debugger *will* break on explicit calls to `error()` and `assert()`.
   - To debug a runtime error, you can wrap the code with `lldebugger.call()`:
-  ```lua
+    ```lua
     require("lldebugger").call(function()
       --code to debug
     end)
     ```
 
 ---
+## Tips
+- You can detect that the debugger extension is attached by inspecting the environment variable `LOCAL_LUA_DEBUGGER_VSCODE`. This is useful for conditionally starting the debugger.
+    ```lua
+    if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
+      require("lldebugger").start()
+    end
+    ```
