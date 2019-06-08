@@ -189,7 +189,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         //Setup process
         const processOptions: child_process.SpawnOptions = {
             env: Object.assign({}, process.env),
-            cwd: this.config.launch.cwd,
+            cwd: this.assert(this.config.launch.cwd),
             shell: true
         };
         processOptions.env = this.assert(processOptions.env);
@@ -237,7 +237,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.assert(this.process.stderr).on("data", data => this.onDebuggerOutput(data, true));
         this.process.on("close", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
         this.process.on("disconnect", () => this.onDebuggerTerminated(`disconnected`));
-        this.process.on("error", err => this.onDebuggerTerminated(`error: ${err}`));
+        this.process.on("error", err => this.onDebuggerTerminated(err.toString(), OutputCategory.Error));
         this.process.on("exit", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
 
         this.showOutput(`process launched`, OutputCategory.Info);
@@ -736,7 +736,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         }
     }
 
-    private onDebuggerTerminated(result: string) {
+    private onDebuggerTerminated(result: string, category = OutputCategory.Info) {
         if (this.process === undefined) {
             return;
         }
@@ -744,14 +744,17 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.process = undefined;
         this.isRunning = false;
 
-        this.showOutput(`debugging ended: ${result}`, OutputCategory.Info);
+        this.showOutput(`debugging ended: ${result}`, category);
         this.sendEvent(new TerminatedEvent());
     }
 
     private sendCommand(cmd: string) {
+        if (this.process === undefined) {
+            return;
+        }
         if (!this.isRunning) {
             this.showOutput(cmd, OutputCategory.Command);
-            this.assert(this.assert(this.process).stdin).write(`${cmd}\n`);
+            this.assert(this.process.stdin).write(`${cmd}\n`);
         } else {
             this.showOutput(`skipping command: ${cmd}`, OutputCategory.Error);
             this.handleMessage({tag: "$luaDebug", type: "error", error: "debugger is running"});

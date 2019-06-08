@@ -54,7 +54,7 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
 
         // Set required defaults
         if (config.launch.cwd === undefined) {
-            config.cwd = folder !== undefined ? folder.uri : ".";
+            config.launch.cwd = folder !== undefined ? folder.uri.fsPath : ".";
         }
 
         // Pass extension path to debugger
