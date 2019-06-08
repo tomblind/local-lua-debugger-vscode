@@ -22,6 +22,7 @@
 
 import * as vscode from "vscode";
 import * as Net from "net";
+import * as path from "path";
 import {LuaDebugSession} from "./luaDebugSession";
 import {LaunchConfig, isLuaProgramConfig} from "./launchConfig";
 
@@ -39,7 +40,7 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
         config: vscode.DebugConfiguration & Partial<LaunchConfig>,
         token?: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.DebugConfiguration> {
-        // Validate config
+        //Validate config
         if (config.launch === undefined) {
             return abortLaunch("No launch parameters set.");
 
@@ -52,12 +53,23 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
             return abortLaunch("No launch parameters set.");
         }
 
-        // Set required defaults
-        if (config.launch.cwd === undefined) {
-            config.launch.cwd = folder !== undefined ? folder.uri.fsPath : ".";
+        //Ensure absolute cwd
+        let cwd: string;
+        if (folder !== undefined) {
+            cwd = folder.uri.fsPath;
+        } else if (vscode.window.activeTextEditor !== undefined) {
+            cwd = path.dirname(vscode.window.activeTextEditor.document.uri.fsPath);
+        } else {
+            return abortLaunch("No path for debugger.");
         }
 
-        // Pass extension path to debugger
+        if (config.launch.cwd === undefined) {
+            config.launch.cwd = cwd;
+        } else if (!path.isAbsolute(config.launch.cwd)) {
+            config.launch.cwd = path.resolve(cwd, config.launch.cwd);
+        }
+
+        //Pass extension path to debugger
         const extension = vscode.extensions.getExtension("tomblind.local-lua-debugger-vscode");
         config.extensionPath = extension !== undefined ? extension.extensionPath : ".";
 
