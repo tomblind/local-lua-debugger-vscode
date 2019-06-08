@@ -43,6 +43,6 @@ export interface LaunchConfig {
     breakOnAttach?: boolean;
 }
 
-export function isLuaProgramConfig(config: LuaProgramConfig | CustomProgramConfig): config is LuaProgramConfig {
-    return (config as LuaProgramConfig).lua !== undefined;
+export function isCustomProgramConfig(config: LuaProgramConfig | CustomProgramConfig): config is CustomProgramConfig {
+    return (config as CustomProgramConfig).executable !== undefined;
 }

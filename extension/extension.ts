@@ -24,9 +24,11 @@ import * as vscode from "vscode";
 import * as Net from "net";
 import * as path from "path";
 import {LuaDebugSession} from "./luaDebugSession";
-import {LaunchConfig, isLuaProgramConfig} from "./launchConfig";
+import {LaunchConfig, isCustomProgramConfig, LuaProgramConfig} from "./launchConfig";
 
 const enableServer = true;
+const debuggerType = "lua-local";
+const interpreterSetting = debuggerType + ".interpreter";
 
 function abortLaunch(message: string) {
     vscode.window.showErrorMessage(message);
@@ -41,16 +43,35 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
         token?: vscode.CancellationToken
     ): vscode.ProviderResult<vscode.DebugConfiguration> {
         //Validate config
+        if (config.request === undefined) {
+            config.request = "launch";
+        }
+
+        if (config.type === undefined) {
+            config.type = debuggerType;
+        }
+
         if (config.launch === undefined) {
-            return abortLaunch("No launch parameters set.");
+            config.launch = {} as LuaProgramConfig;
+        }
 
-        } else if (isLuaProgramConfig(config.launch)) {
-            if (config.launch.file === undefined) {
-                return abortLaunch("No lua file specified.");
+        if (!isCustomProgramConfig(config.launch)) {
+            if (config.launch.lua === undefined) {
+                const luaBin: string | undefined = vscode.workspace.getConfiguration().get(interpreterSetting);
+                if (luaBin === undefined) {
+                    return abortLaunch(
+                        `You must set "${interpreterSetting}" in your settings, or "launch.lua" `
+                        + `in your launch.json, to debug with a lua interpreter.`
+                    );
+                }
+                config.launch.lua = luaBin;
             }
-
-        } else if (config.launch.executable === undefined) {
-            return abortLaunch("No launch parameters set.");
+            if (config.launch.file === undefined) {
+                if (vscode.window.activeTextEditor === undefined) {
+                    return abortLaunch("Nothing to debug.");
+                }
+                config.launch.file = vscode.window.activeTextEditor.document.uri.fsPath;
+            }
         }
 
         //Ensure absolute cwd
@@ -107,12 +128,12 @@ if (enableServer) {
 
 export function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(
-        vscode.debug.registerDebugConfigurationProvider("lua-local", configurationProvider)
+        vscode.debug.registerDebugConfigurationProvider(debuggerType, configurationProvider)
     );
 
     if (debugAdapaterDescriptorFactory !== undefined) {
         context.subscriptions.push(
-            vscode.debug.registerDebugAdapterDescriptorFactory("lua-local", debugAdapaterDescriptorFactory)
+            vscode.debug.registerDebugAdapterDescriptorFactory(debuggerType, debugAdapaterDescriptorFactory)
         );
         context.subscriptions.push(debugAdapaterDescriptorFactory);
     }

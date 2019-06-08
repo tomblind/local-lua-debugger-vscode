@@ -4,7 +4,7 @@ A simple Lua debugger for Visual Studio Code which requires no external dependen
 
 ---
 ## Features
-- Debug Lua in any environment that supports communication via stdio (such as the stand-alone Lua interpreter)
+- Debug Lua in any environment that supports communication via stdio (including the stand-alone Lua interpreter)
 - Supports Lua versions 5.1, 5.2, 5.3 and [LuaJit](https://luajit.org/)
 - Basic debugging features (stepping, inspecting, breakpoints, etc...)
 - Conditional breakpoints
@@ -15,7 +15,11 @@ A simple Lua debugger for Visual Studio Code which requires no external dependen
 ## Usage
 
 ### Lua Stand-Alone Interpreter
-To debug a Lua program using the stand-alone interpreter, set up your `launch.json` with the name/path of the interpreter, and the file you wish to pass to it:
+To debug a Lua program using a stand-alone interpreter, set `lua-local.interpreter` in your user or workspace settings:
+```json
+  "lua-local.interpreter": "lua5.1"
+```
+Alternatively, you can set the interpreter and file to run in `launch.json`:
 ```json
 {
   "configurations": [

@@ -42,7 +42,7 @@ import * as child_process from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import {Message} from "./message";
-import {LaunchConfig, isLuaProgramConfig} from "./launchConfig";
+import {LaunchConfig, isCustomProgramConfig} from "./launchConfig";
 
 interface MessageHandler<T extends LuaDebug.Message = LuaDebug.Message> {
     (msg: T): void;
@@ -217,13 +217,13 @@ export class LuaDebugSession extends LoggingDebugSession {
         //Launch process
         let processExecutable: string;
         let processArgs: string[];
-        if (isLuaProgramConfig(args.launch)) {
-            processExecutable = `"${args.launch.lua}"`;
-            processArgs = ["-e", `"require('lldebugger').runFile([[${args.launch.file}]], true)"`];
-
-        } else {
+        if (isCustomProgramConfig(args.launch)) {
             processExecutable = `"${args.launch.executable}"`;
             processArgs = args.launch.args !== undefined ? args.launch.args : [];
+
+        } else {
+            processExecutable = `"${args.launch.lua}"`;
+            processArgs = ["-e", `"require('lldebugger').runFile([[${args.launch.file}]], true)"`];
         }
         this.process = child_process.spawn(processExecutable, processArgs, processOptions);
 
@@ -237,7 +237,10 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.assert(this.process.stderr).on("data", data => this.onDebuggerOutput(data, true));
         this.process.on("close", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
         this.process.on("disconnect", () => this.onDebuggerTerminated(`disconnected`));
-        this.process.on("error", err => this.onDebuggerTerminated(err.toString(), OutputCategory.Error));
+        this.process.on(
+            "error",
+            err => this.onDebuggerTerminated(`Failed to launch "${processExecutable}": ${err}`, OutputCategory.Error)
+        );
         this.process.on("exit", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
 
         this.showOutput(`process launched`, OutputCategory.Info);
@@ -562,7 +565,9 @@ export class LuaDebugSession extends LoggingDebugSession {
         const result = await this.getEvaluateResult(expression);
         if (!result.success) {
             if (result.error !== undefined && args.context !== "hover") {
-                this.showOutput(result.error, OutputCategory.Error);
+                if (args.context !== "watch") {
+                    this.showOutput(result.error, OutputCategory.Error);
+                }
                 response.body = {result: result.error, variablesReference: 0};
             }
 

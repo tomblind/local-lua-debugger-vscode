@@ -16,6 +16,7 @@
     ],
     "keywords": [
         "lua",
+        "luajit",
         "tstl",
         "typescripttolua",
         "typescript-to-lua",
@@ -33,6 +34,18 @@
         "onDebug"
     ],
     "contributes": {
+        "configuration":[
+            {
+                "title": "lua-local",
+                "properties": {
+                    "interpreter": {
+                        "type": "string",
+                        "default": "lua",
+                        "description": "Lua stand-alone interpreter to use when none is specified in launch.json"
+                    }
+                }
+            }
+        ],
         "breakpoints": [
             {
                 "language": "lua"
@@ -44,21 +57,40 @@
                 "label": "Local Lua Debugger",
                 "program": "./debugAdapter.js",
                 "runtime": "node",
+                "languages": ["lua"],
+                "initialConfigurations": [
+                    {
+                        "name": "Debug Lua Interpreter",
+                        "type": "local-lua",
+                        "launch": {
+                            "lua": "lua",
+                            "file": "${file}"
+                        }
+                    },
+                    {
+                        "name": "Debug Custom Lua Environment",
+                        "type": "local-lua",
+                        "launch": {
+                            "executable": "myProgram",
+                            "args": []
+                        }
+                    }
+                ],
                 "configurationAttributes": {
                     "launch": {
                         "properties": {
                             "sourceRoot": {
                                 "type": "string",
-                                "description": "Root path of source mapped files."
+                                "description": "Root path of source mapped files"
                             },
                             "verbose": {
                                 "type": "boolean",
-                                "description": "Enable verbose output.",
+                                "description": "Enable verbose output",
                                 "default": false
                             },
                             "breakOnAttach": {
                                 "type": "boolean",
-                                "description": "Pause debugging as soon as debugger attaches to program.",
+                                "description": "Pause debugging as soon as debugger attaches to program",
                                 "default": false
                             },
                             "launch": {
@@ -68,31 +100,27 @@
                                         "properties": {
                                             "lua": {
                                                 "type": "string",
-                                                "description": "The lua executable to use.",
+                                                "description": "Lua stand-alone interpreter to use",
                                                 "default": "lua"
                                             },
                                             "file": {
                                                 "type": "string",
-                                                "description": "The file to pass to lua to start the program.",
+                                                "description": "The entry point file of the program",
                                                 "default": "${file}"
                                             },
                                             "cwd": {
                                                 "type": "string",
-                                                "description": "Working directory to launch lua in.",
+                                                "description": "Working directory to launch Lua in",
                                                 "default": "${workspaceFolder}"
                                             },
                                             "env": {
                                                 "type": "object",
-                                                "description": "Environment variables to set.",
+                                                "description": "Environment variables to set",
                                                 "additionalProperties": {
                                                     "type": "string"
                                                 }
                                             }
                                         },
-                                        "required": [
-                                            "file",
-                                            "lua"
-                                        ],
                                         "additionalProperties": false
                                     },
                                     {
@@ -100,24 +128,24 @@
                                         "properties": {
                                             "executable": {
                                                 "type": "string",
-                                                "description": "The executable to run."
+                                                "description": "The custom executable to run"
                                             },
                                             "args": {
                                                 "type": "array",
                                                 "items": {
                                                     "type": "string"
                                                 },
-                                                "description": "Arguments to pass to the executable.",
+                                                "description": "Arguments to pass to the executable",
                                                 "default": []
                                             },
                                             "cwd": {
                                                 "type": "string",
-                                                "description": "Working directory to launch the executable in.",
+                                                "description": "Working directory to launch the executable in",
                                                 "default": "${workspaceFolder}"
                                             },
                                             "env": {
                                                 "type": "object",
-                                                "description": "Environment variables to set.",
+                                                "description": "Environment variables to set",
                                                 "additionalProperties": {
                                                     "type": "string"
                                                 }
@@ -130,10 +158,7 @@
                                     }
                                 ]
                             }
-                        },
-                        "require": [
-                            "launch"
-                        ]
+                        }
                     }
                 }
             }
