@@ -18,7 +18,9 @@
         "lua",
         "tstl",
         "typescripttolua",
-        "typescript-to-lua"
+        "typescript-to-lua",
+        "love",
+        "corona"
     ],
     "dependencies": {
         "vscode-debugadapter": "^1.35.0"
