@@ -1,10 +1,10 @@
 # Local Lua Debugger for Visual Studio Code
 
-A simple Lua debugger for Visual Studio Code which requires no external dependencies.
+A simple Lua debugger for Visual Studio Code which suports Lua stand-alone interpreters as well as custom Lua executables/environments and requires no external dependencies.
 
 ---
 ## Features
-- Debug Lua in any environment that supports communication via stdio (including the stand-alone Lua interpreter)
+- Debug Lua in any environment that supports communication via stdio
 - Supports Lua versions 5.1, 5.2, 5.3 and [LuaJit](https://luajit.org/)
 - Basic debugging features (stepping, inspecting, breakpoints, etc...)
 - Conditional breakpoints
@@ -37,7 +37,7 @@ Alternatively, you can set the interpreter and file to run in `launch.json`:
 ```
 
 ### Custom Lua Environment
-To debug using a custom Lua environment, you must set up your `launch.json` with the name/path of the executable and any additional arguments that may be needed.
+To debug using a custom Lua executable, you must set up your `launch.json` with the name/path of the executable and any additional arguments that may be needed.
 ```json
 {
   "type": "lua-local",
@@ -63,20 +63,20 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
   - Some enviroments may require command line options to support this.
   - Ex. the Corona Simulator requires the `/no-console` flag.
 - The Lua environment must be built with the `debug` library, and no other code should attempt to set debug hooks.
-- You cannot pause debugging while the program is running.
+- You cannot manually pause debugging while the program is running.
 - In Lua 5.1 and LuaJit, the main thread cannot be accessed while stopped inside of a coroutine.
-- Most custom enviroments do not support breaking on runtime errors.
-  - The debugger *will* break on explicit calls to `error()` and `assert()`.
+- Most custom enviroments do not support stopping on runtime errors.
+  - The debugger *will* stop on explicit calls to `error()` and `assert()`.
   - To debug a runtime error, you can wrap the code with `lldebugger.call()`:
     ```lua
     require("lldebugger").call(function()
-      --code to debug
+      --code causing runtime error
     end)
     ```
 
 ---
 ## Tips
-- You can detect that the debugger extension is attached by inspecting the environment variable `LOCAL_LUA_DEBUGGER_VSCODE`. This is useful for conditionally starting the debugger.
+- You can detect that the debugger extension is attached by inspecting the environment variable `LOCAL_LUA_DEBUGGER_VSCODE`. This is useful for conditionally starting the debugger in custom environments.
     ```lua
     if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
       require("lldebugger").start()
