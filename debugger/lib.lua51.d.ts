@@ -390,7 +390,17 @@ declare function type(
  *   length of the list, as defined by the length operator (see 2.5.5).
 */
 /** @tupleReturn */
-declare function unpack<A extends unknown[]>(this: void, list: A, i?: number, j?: number): A;
+declare function unpack<A extends unknown[]>(this: void, list: A): A;
+
+/**
+ * Returns the elements from the given table. This function is equivalent to
+ *        return list[i], list[i+1], ..., list[j]
+ *
+ * except that the above code can be written only for a fixed number of elements. By default, `i` is 1 and `j` is the
+ *   length of the list, as defined by the length operator (see 2.5.5).
+*/
+/** @tupleReturn */
+declare function unpack<T>(this: void, list: T[], i: number, j?: number): T[];
 
 /**
  * A global variable (not a function) that holds a string containing the current interpreter version. The current
