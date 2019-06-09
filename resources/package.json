@@ -2,7 +2,7 @@
     "name": "local-lua-debugger-vscode",
     "publisher": "tomblind",
     "version": "0.1.0",
-    "description": "Local Lua Debugger VSCode Extension",
+    "description": "Local Lua Debugger Visual Studio Code Extension",
     "displayName": "Local Lua Debugger",
     "icon": "Lua-Logo_128x128.png",
     "repository": {
@@ -21,6 +21,7 @@
         "typescripttolua",
         "typescript-to-lua",
         "love",
+        "löve",
         "corona"
     ],
     "dependencies": {
@@ -71,7 +72,7 @@
                         "name": "Debug Custom Lua Environment",
                         "type": "local-lua",
                         "launch": {
-                            "executable": "myProgram",
+                            "executable": "program",
                             "args": []
                         }
                     }
