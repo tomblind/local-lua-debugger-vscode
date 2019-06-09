@@ -676,6 +676,15 @@ namespace Debugger {
     function getLocals(level: number, thread: Thread): Locals {
         const locs: Locals = {};
 
+        //Validate level
+        if (isThread(thread)) {
+            if (!debug.getinfo(thread, level, "l")) {
+                return locs;
+            }
+        } else if (!debug.getinfo(level, "l")) {
+            return locs;
+        }
+
         if (coroutine.running() !== undefined && !isThread(thread)) {
             return locs; // Accessing locals for main thread, but we're in a coroutine right now
         }
@@ -683,6 +692,7 @@ namespace Debugger {
         let name: string | undefined;
         let val: unknown;
 
+        //Standard locals
         let index = 1;
         while (true) {
             if (isThread(thread)) {
@@ -702,6 +712,7 @@ namespace Debugger {
             ++index;
         }
 
+        //Varargs
         index = -1;
         while (true) {
             if (isThread(thread)) {
@@ -729,8 +740,10 @@ namespace Debugger {
     function getUpvalues(info: debug.FunctionInfo): Locals {
         const ups: Locals = {};
 
-        info.nups = assert(info.nups);
-        info.func = assert(info.func);
+        if (!info.nups || !info.func) {
+            return ups;
+        }
+
         for (const index of forRange(1, info.nups)) {
             const [name, val] = debug.getupvalue(info.func, index);
             ups[assert(name)] = {val, index, type: type(val)};
@@ -911,11 +924,17 @@ namespace Debugger {
                         if (newThread === activeThread) {
                             currentStack = activeStack;
                         } else if (newThread === mainThreadName) {
-                            currentStack = [{name: "unable to access main thread while running in a coroutine"}];
+                            currentStack = [{
+                                name: "unable to access main thread while running in a coroutine",
+                                source: ""
+                            }];
                         } else {
                             currentStack = getStack(newThread);
                             if (currentStack.length === 0) {
-                                table.insert(currentStack, {name: "thread has not been started"});
+                                table.insert(
+                                    currentStack,
+                                    {name: "thread has not been started", source: ""}
+                                );
                             }
                         }
                         currentThread = newThread;

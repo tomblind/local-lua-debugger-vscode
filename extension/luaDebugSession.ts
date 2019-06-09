@@ -645,6 +645,9 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     private resolvePath(filePath: string) {
+        if (filePath.length === 0) {
+            return undefined;
+        }
         if (path.isAbsolute(filePath)) {
             return fs.existsSync(filePath) ? filePath : undefined;
         }
