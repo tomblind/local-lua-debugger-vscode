@@ -1224,6 +1224,22 @@ namespace Debugger {
         return thread;
     }
 
+    //coroutine.wrap replacement for hooking threads
+    const luaCoroutineWrap = coroutine.wrap;
+
+    function debuggerCoroutineWrap(f: Function) {
+        const thread = debuggerCoroutineCreate(f);
+        /** @tupleReturn */
+        const resumer = (...args: unknown[]) => {
+            const results = coroutine.resume(thread, ...args);
+            if (!results[0]) {
+                throw results[1];
+            }
+            return unpack(results, 2);
+        };
+        return resumer;
+    }
+
     //debug.traceback replacement for catching errors
     const luaDebugTraceback = debug.traceback;
 
@@ -1282,6 +1298,7 @@ namespace Debugger {
         }
 
         coroutine.create = debuggerCoroutineCreate;
+        coroutine.wrap = debuggerCoroutineWrap;
         _G.error = debuggerError;
         _G.assert = debuggerAssert;
         debug.traceback = debuggerTraceback;
@@ -1307,6 +1324,7 @@ namespace Debugger {
         }
 
         coroutine.create = luaCoroutineCreate;
+        coroutine.wrap = luaCoroutineWrap;
         _G.error = luaError;
         _G.assert = luaAssert;
         debug.traceback = luaDebugTraceback;
