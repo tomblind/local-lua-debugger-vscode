@@ -3,7 +3,6 @@
 		"module": "commonjs",
 		"target": "es6",
         "strict": true,
-        "outDir": "../out",
         "sourceMap": true
     },
     "include": [

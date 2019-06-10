@@ -1,10 +1,10 @@
 # Local Lua Debugger for Visual Studio Code
 
-A simple debugger for Lua which supports stand-alone interpreters and custom environments which requires no additional dependencies.
+A simple Lua debugger which requires no additional dependencies.
 
 ---
 ## Features
-- Debug Lua in any environment that supports communication via stdio
+- Debug Lua using stand-alone interpretor or a custom executables
 - Supports Lua versions 5.1, 5.2, 5.3 and [LuaJIT](https://luajit.org/)
 - Basic debugging features (stepping, inspecting, breakpoints, etc...)
 - Conditional breakpoints

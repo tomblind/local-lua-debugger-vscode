@@ -212,7 +212,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         } else if (luaPath.length > 0 && !luaPath.endsWith(";")) {
             luaPath += ";";
         }
-        processOptions.env[luaPathKey] = luaPath + `${args.extensionPath}/?.lua`;
+        processOptions.env[luaPathKey] = luaPath + `${args.extensionPath}/debugger/?.lua`;
 
         //Launch process
         let processExecutable: string;

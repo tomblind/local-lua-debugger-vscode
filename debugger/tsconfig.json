@@ -6,8 +6,7 @@
         "keyofStringsOnly": true,
         "typeRoots": [],
         "noLib": true,
-        "outDir": "../out",
-        // "sourceMap": true
+        "sourceMap": true
     },
     "include": [
         "./**/*.ts"

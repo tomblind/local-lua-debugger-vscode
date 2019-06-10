@@ -1,3 +1,6 @@
-/out
-/node_modules
-/.vscode
+**/*.lua
+*.lua.map
+**/*.js
+**/*.js.map
+node_modules
+.vscode
