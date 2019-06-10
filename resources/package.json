@@ -37,11 +37,11 @@
     "contributes": {
         "configuration":[
             {
-                "title": "lua-local",
+                "title": "Local Lua Debugger",
                 "properties": {
-                    "interpreter": {
+                    "lua-local.interpreter": {
                         "type": "string",
-                        "default": "lua",
+                        "default": "",
                         "description": "Lua stand-alone interpreter to use when none is specified in launch.json"
                     }
                 }
