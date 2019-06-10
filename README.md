@@ -16,9 +16,9 @@ A simple Lua debugger which requires no additional dependencies.
 
 ### Lua Stand-Alone Interpreter
 To debug a Lua program using a stand-alone interpreter, set `lua-local.interpreter` in your user or workspace settings:
-```json
-  "lua-local.interpreter": "lua5.1"
-```
+
+!["lua-local.interpreter": "lua5.1"](resources/settings.png '"lua-local.interpreter": "lua5.1"')
+
 Alternatively, you can set the interpreter and file to run in `launch.json`:
 ```json
 {
@@ -51,7 +51,7 @@ To debug using a custom Lua executable, you must set up your `launch.json` with 
   }
 }
 ```
-You must then manually start the debugger in your code:
+You must then manually start the debugger in your Lua code:
 ```lua
 require("lldebugger").start()
 ```
