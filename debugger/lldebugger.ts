@@ -38,6 +38,9 @@ declare function pairs<T extends object>(this: void, t: T): LuaPairsIterable<T>;
 /** @forRange */
 declare function forRange(start: number, limit: number, step?: number): number[];
 
+/** @elipsisForward */
+declare function elipsisForward<A extends unknown[]>(args: A): A;
+
 //Enure destructuring works in all lua versions
 _G.unpack = _G.unpack || (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack;
 
@@ -1250,7 +1253,7 @@ namespace Debugger {
         const thread = debuggerCoroutineCreate(f);
         /** @tupleReturn */
         const resumer = (...args: unknown[]) => {
-            const results = coroutine.resume(thread, ...args);
+            const results = coroutine.resume(thread, ...elipsisForward(args));
             if (!results[0]) {
                 throw results[1];
             }
@@ -1307,7 +1310,7 @@ namespace Debugger {
             skipBreakInNextTraceback = true;
             return luaError(message);
         }
-        return [v, ...args];
+        return [v, ...elipsisForward(args)];
     }
 
     export function pushHook() {
