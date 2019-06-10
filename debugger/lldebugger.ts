@@ -299,15 +299,6 @@ namespace SourceMap
             }
         }
 
-        // let s = "";
-        // for (const [l, m] of pairs(sourceMap)) {
-        //     const mapping = m as unknown as SourceLineMapping;
-        //     if (typeof l === "number") {
-        //         s += `${l} -> ${sourceMap.sources[mapping.sourceIndex]}:${mapping.sourceLine}:${mapping.sourceColumn}\n`;
-        //     }
-        // }
-        // print(s);
-
         return sourceMap;
     }
 
