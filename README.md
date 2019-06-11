@@ -40,14 +40,18 @@ Alternatively, you can set the interpreter and file to run in `launch.json`:
 To debug using a custom Lua executable, you must set up your `launch.json` with the name/path of the executable and any additional arguments that may be needed.
 ```json
 {
-  "type": "lua-local",
-  "request": "launch",
-  "name": "Debug LÖVE",
-  "program": {
-    "command": "love",
-  },
-  "args": [
-    "${workspaceFolder}"
+  "configurations": [
+    {
+      "type": "lua-local",
+      "request": "launch",
+      "name": "Debug LÖVE",
+      "program": {
+        "command": "love"
+      },
+      "args": [
+        "${workspaceFolder}"
+      ]
+    }
   ]
 }
 ```
