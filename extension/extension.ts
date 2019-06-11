@@ -52,26 +52,26 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
             config.type = debuggerType;
         }
 
-        if (config.launch === undefined) {
-            config.launch = {} as LuaProgramConfig;
+        if (config.program === undefined) {
+            config.program = {} as LuaProgramConfig;
         }
 
-        if (!isCustomProgramConfig(config.launch)) {
-            if (config.launch.lua === undefined) {
+        if (!isCustomProgramConfig(config.program)) {
+            if (config.program.lua === undefined) {
                 const luaBin: string | undefined = vscode.workspace.getConfiguration().get(interpreterSetting);
                 if (luaBin === undefined || luaBin.length === 0) {
                     return abortLaunch(
-                        `You must set "${interpreterSetting}" in your settings, or "launch.lua" `
+                        `You must set "${interpreterSetting}" in your settings, or "program.lua" `
                         + `in your launch.json, to debug with a lua interpreter.`
                     );
                 }
-                config.launch.lua = luaBin;
+                config.program.lua = luaBin;
             }
-            if (config.launch.file === undefined) {
+            if (config.program.file === undefined) {
                 if (editor === undefined || editor.document.languageId !== "lua" || editor.document.isUntitled) {
-                    return abortLaunch("'launch.file' not set in launch.json");
+                    return abortLaunch("'program.file' not set in launch.json");
                 }
-                config.launch.file = editor.document.uri.fsPath;
+                config.program.file = editor.document.uri.fsPath;
             }
         }
 
@@ -85,10 +85,10 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
             return abortLaunch("No path for debugger");
         }
 
-        if (config.launch.cwd === undefined) {
-            config.launch.cwd = cwd;
-        } else if (!path.isAbsolute(config.launch.cwd)) {
-            config.launch.cwd = path.resolve(cwd, config.launch.cwd);
+        if (config.cwd === undefined) {
+            config.cwd = cwd;
+        } else if (!path.isAbsolute(config.cwd)) {
+            config.cwd = path.resolve(cwd, config.cwd);
         }
 
         //Pass extension path to debugger

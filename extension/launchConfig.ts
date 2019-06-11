@@ -20,29 +20,26 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
-export interface ProgramConfig {
-    cwd: string;
-    env?: { [name: string]: string };
-}
-
-export interface LuaProgramConfig extends ProgramConfig {
+export interface LuaProgramConfig {
     lua: string;
     file: string;
 }
 
-export interface CustomProgramConfig extends ProgramConfig {
-    executable: string;
-    args?: string[];
+export interface CustomProgramConfig {
+    command: string;
 }
 
 export interface LaunchConfig {
     extensionPath: string;
-    launch: LuaProgramConfig | CustomProgramConfig;
+    cwd: string;
+    program: LuaProgramConfig | CustomProgramConfig;
+    args?: string[];
+    env?: { [name: string]: string };
     sourceRoot?: string;
     verbose?: boolean;
-    breakOnAttach?: boolean;
+    stopOnEntry?: boolean;
 }
 
 export function isCustomProgramConfig(config: LuaProgramConfig | CustomProgramConfig): config is CustomProgramConfig {
-    return (config as CustomProgramConfig).executable !== undefined;
+    return (config as CustomProgramConfig).command !== undefined;
 }

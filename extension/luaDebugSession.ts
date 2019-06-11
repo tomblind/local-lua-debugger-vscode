@@ -180,7 +180,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         args: DebugProtocol.LaunchRequestArguments & LaunchConfig
     ) {
         this.config = args;
-        this.autoContinueNext = args.breakOnAttach !== true;
+        this.autoContinueNext = this.config.stopOnEntry !== true;
 
         this.showOutput("launchRequest", OutputCategory.Request);
 
@@ -189,15 +189,15 @@ export class LuaDebugSession extends LoggingDebugSession {
         //Setup process
         const processOptions: child_process.SpawnOptions = {
             env: Object.assign({}, process.env),
-            cwd: this.assert(this.config.launch.cwd),
+            cwd: this.assert(this.config.cwd),
             shell: true
         };
         processOptions.env = this.assert(processOptions.env);
 
-        if (args.launch.env !== undefined) {
-            for (const key in args.launch.env) {
+        if (this.config.env !== undefined) {
+            for (const key in this.config.env) {
                 const envKey = getEnvKey(processOptions.env, key);
-                processOptions.env[envKey] = args.launch.env[key];
+                processOptions.env[envKey] = this.config.env[key];
             }
         }
 
@@ -212,23 +212,27 @@ export class LuaDebugSession extends LoggingDebugSession {
         } else if (luaPath.length > 0 && !luaPath.endsWith(";")) {
             luaPath += ";";
         }
-        processOptions.env[luaPathKey] = luaPath + `${args.extensionPath}/debugger/?.lua`;
+        processOptions.env[luaPathKey] = luaPath + `${this.config.extensionPath}/debugger/?.lua`;
 
         //Launch process
         let processExecutable: string;
         let processArgs: string[];
-        if (isCustomProgramConfig(args.launch)) {
-            processExecutable = `"${args.launch.executable}"`;
-            processArgs = args.launch.args !== undefined ? args.launch.args : [];
+        if (isCustomProgramConfig(this.config.program)) {
+            processExecutable = `"${this.config.program.command}"`;
+            processArgs = this.config.args !== undefined ? this.config.args : [];
 
         } else {
-            processExecutable = `"${args.launch.lua}"`;
-            processArgs = ["-e", `"require('lldebugger').runFile([[${args.launch.file}]], true)"`];
+            processExecutable = `"${this.config.program.lua}"`;
+            const programArgs = (this.config.args !== undefined) ? `, ${this.config.args.map(a => `\\"${a}\\"`)}` : "";
+            processArgs = [
+                "-e",
+                `"require('lldebugger').runFile([[${this.config.program.file}]], true${programArgs})"`
+            ];
         }
         this.process = child_process.spawn(processExecutable, processArgs, processOptions);
 
         this.showOutput(
-            `launching "${processExecutable} ${processArgs.join(" ")}" from ${this.config.launch.cwd}`,
+            `launching "${processExecutable} ${processArgs.join(" ")}" from ${this.config.cwd}`,
             OutputCategory.Info
         );
 
@@ -651,7 +655,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (path.isAbsolute(filePath)) {
             return fs.existsSync(filePath) ? filePath : undefined;
         }
-        const fullPath = path.resolve(this.assert(this.config).launch.cwd, filePath);
+        const fullPath = path.resolve(this.assert(this.config).cwd, filePath);
         if (fs.existsSync(fullPath)) {
             return fullPath;
         }

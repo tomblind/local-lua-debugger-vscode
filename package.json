@@ -82,7 +82,7 @@
                     {
                         "name": "Debug Lua Interpreter",
                         "type": "local-lua",
-                        "launch": {
+                        "program": {
                             "lua": "lua",
                             "file": "${file}"
                         }
@@ -90,10 +90,10 @@
                     {
                         "name": "Debug Custom Lua Environment",
                         "type": "local-lua",
-                        "launch": {
-                            "executable": "program",
-                            "args": []
-                        }
+                        "program": {
+                            "command": "command"
+                        },
+                        "args": []
                     }
                 ],
                 "configurationAttributes": {
@@ -108,12 +108,32 @@
                                 "description": "Enable verbose output",
                                 "default": false
                             },
-                            "breakOnAttach": {
+                            "stopOnEntry": {
                                 "type": "boolean",
                                 "description": "Pause debugging as soon as debugger attaches to program",
                                 "default": false
                             },
-                            "launch": {
+                            "cwd": {
+                                "type": "string",
+                                "description": "Working directory to launch Lua in",
+                                "default": "${workspaceFolder}"
+                            },
+                            "env": {
+                                "type": "object",
+                                "description": "Environment variables to set",
+                                "additionalProperties": {
+                                    "type": "string"
+                                }
+                            },
+                            "args": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Arguments to pass to the program",
+                                "default": []
+                            },
+                            "program": {
                                 "oneOf": [
                                     {
                                         "type": "object",
@@ -127,18 +147,6 @@
                                                 "type": "string",
                                                 "description": "The entry point file of the program",
                                                 "default": "${file}"
-                                            },
-                                            "cwd": {
-                                                "type": "string",
-                                                "description": "Working directory to launch Lua in",
-                                                "default": "${workspaceFolder}"
-                                            },
-                                            "env": {
-                                                "type": "object",
-                                                "description": "Environment variables to set",
-                                                "additionalProperties": {
-                                                    "type": "string"
-                                                }
                                             }
                                         },
                                         "additionalProperties": false
@@ -146,33 +154,13 @@
                                     {
                                         "type": "object",
                                         "properties": {
-                                            "executable": {
+                                            "command": {
                                                 "type": "string",
-                                                "description": "The custom executable to run"
-                                            },
-                                            "args": {
-                                                "type": "array",
-                                                "items": {
-                                                    "type": "string"
-                                                },
-                                                "description": "Arguments to pass to the executable",
-                                                "default": []
-                                            },
-                                            "cwd": {
-                                                "type": "string",
-                                                "description": "Working directory to launch the executable in",
-                                                "default": "${workspaceFolder}"
-                                            },
-                                            "env": {
-                                                "type": "object",
-                                                "description": "Environment variables to set",
-                                                "additionalProperties": {
-                                                    "type": "string"
-                                                }
+                                                "description": "The custom command to run"
                                             }
                                         },
                                         "required": [
-                                            "executable"
+                                            "command"
                                         ],
                                         "additionalProperties": false
                                     }

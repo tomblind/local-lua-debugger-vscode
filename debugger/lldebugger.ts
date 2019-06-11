@@ -1367,15 +1367,6 @@ namespace Debugger {
         const thread = coroutine.running() || mainThread;
         Send.debugBreak(msg, "error", assert(threadIds.get(thread)));
         debugBreak(thread, 2);
-        Debugger.popHook();
-    }
-
-    function wrapFunction(func: DebuggableFunction, args: unknown[]) {
-        return () => {
-            const results = func(...args);
-            Debugger.popHook();
-            return results;
-        };
     }
 
     /** @tupleReturn */
@@ -1386,7 +1377,8 @@ namespace Debugger {
             Debugger.triggerBreak();
         }
 
-        const [success, results] = xpcall(wrapFunction(func, args), onError);
+        const [success, results] = xpcall(() => func(...args), onError);
+        Debugger.popHook();
         if (success) {
             return results;
         }
@@ -1411,7 +1403,7 @@ export function stop() {
 
 //Load and debug the specified file
 /** @tupleReturn */
-export function runFile(filePath: unknown, breakImmediately?: boolean) {
+export function runFile(filePath: unknown, breakImmediately?: boolean, ...args: unknown[]) {
     if (typeof filePath !== "string") {
         throw `expected string as first argument to runFile, but got '${type(filePath)}'`;
     }
@@ -1419,7 +1411,7 @@ export function runFile(filePath: unknown, breakImmediately?: boolean) {
         throw `expected boolean as second argument to runFile, but got '${type(breakImmediately)}'`;
     }
     const [func] = assert(...loadfile(filePath));
-    return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, []);
+    return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, args);
 }
 
 //Call and debug the specified function
