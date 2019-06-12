@@ -187,10 +187,10 @@ export class LuaDebugSession extends LoggingDebugSession {
         await this.waitForConfiguration();
 
         //Setup process
-        const cwd = path.isAbsolute(this.config.cwd)
-            ? this.config.cwd
-            : path.resolve(this.config.workspacePath, this.config.cwd);
-
+        if (!path.isAbsolute(this.config.cwd)) {
+            this.config.cwd = path.resolve(this.config.workspacePath, this.config.cwd);
+        }
+        const cwd = this.config.cwd;
         const processOptions/* : child_process.SpawnOptions */ = {
             env: Object.assign({}, process.env),
             cwd,
@@ -235,7 +235,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.process = child_process.spawn(processExecutable, processArgs, processOptions);
 
         this.showOutput(
-            `launching "${processExecutable} ${processArgs.join(" ")}" from ${this.config.cwd}`,
+            `launching \`${processExecutable} ${processArgs.join(" ")}\` from "${cwd}"`,
             OutputCategory.Info
         );
 
@@ -246,7 +246,10 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.process.on("disconnect", () => this.onDebuggerTerminated(`disconnected`));
         this.process.on(
             "error",
-            err => this.onDebuggerTerminated(`Failed to launch "${processExecutable}": ${err}`, OutputCategory.Error)
+            err => this.onDebuggerTerminated(
+                `Failed to launch \`${processExecutable} ${processArgs.join(" ")}\` from "${cwd}": ${err}`,
+                OutputCategory.Error
+            )
         );
         this.process.on("exit", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
 
