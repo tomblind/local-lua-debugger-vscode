@@ -31,9 +31,10 @@ export interface CustomProgramConfig {
 
 export interface LaunchConfig {
     extensionPath: string;
-    cwd: string;
+    workspacePath: string;
     program: LuaProgramConfig | CustomProgramConfig;
     args?: string[];
+    cwd: string;
     env?: { [name: string]: string };
     sourceRoot?: string;
     verbose?: boolean;

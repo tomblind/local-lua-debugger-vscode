@@ -26,7 +26,7 @@ import * as path from "path";
 import {LuaDebugSession} from "./luaDebugSession";
 import {LaunchConfig, isCustomProgramConfig, LuaProgramConfig} from "./launchConfig";
 
-const enableServer = false;
+const enableServer = true;
 const debuggerType = "lua-local";
 const interpreterSetting = debuggerType + ".interpreter";
 
@@ -75,25 +75,24 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
             }
         }
 
-        //Ensure absolute cwd
-        let cwd: string;
+        //Pass paths to debugger
         if (folder !== undefined) {
-            cwd = folder.uri.fsPath;
+            config.workspacePath = folder.uri.fsPath;
         } else if (vscode.window.activeTextEditor !== undefined) {
-            cwd = path.dirname(vscode.window.activeTextEditor.document.uri.fsPath);
+            config.workspacePath = path.dirname(vscode.window.activeTextEditor.document.uri.fsPath);
         } else {
             return abortLaunch("No path for debugger");
         }
 
-        if (config.cwd === undefined) {
-            config.cwd = cwd;
-        } else if (!path.isAbsolute(config.cwd)) {
-            config.cwd = path.resolve(cwd, config.cwd);
-        }
-
-        //Pass extension path to debugger
         const extension = vscode.extensions.getExtension("tomblind.local-lua-debugger-vscode");
-        config.extensionPath = extension !== undefined ? extension.extensionPath : ".";
+        if (extension === undefined) {
+            return abortLaunch("Failed to find extension path");
+        }
+        config.extensionPath = extension.extensionPath;
+
+        if (config.cwd === undefined) {
+            config.cwd = config.workspacePath;
+        }
 
         return config;
     }

@@ -187,12 +187,15 @@ export class LuaDebugSession extends LoggingDebugSession {
         await this.waitForConfiguration();
 
         //Setup process
-        const processOptions: child_process.SpawnOptions = {
+        const cwd = path.isAbsolute(this.config.cwd)
+            ? this.config.cwd
+            : path.resolve(this.config.workspacePath, this.config.cwd);
+
+        const processOptions/* : child_process.SpawnOptions */ = {
             env: Object.assign({}, process.env),
-            cwd: this.assert(this.config.cwd),
+            cwd,
             shell: true
         };
-        processOptions.env = this.assert(processOptions.env);
 
         if (this.config.env !== undefined) {
             for (const key in this.config.env) {
