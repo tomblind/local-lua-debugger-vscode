@@ -38,8 +38,8 @@ declare function pairs<T extends object>(this: void, t: T): LuaPairsIterable<T>;
 /** @forRange */
 declare function forRange(start: number, limit: number, step?: number): number[];
 
-/** @elipsisForward */
-declare function elipsisForward<A extends unknown[]>(args: A): A;
+/** @varArg */
+type LuaVarArg<A extends unknown[]> = A & { __luaVarArg?: never };
 
 //Enure destructuring works in all lua versions
 _G.unpack = _G.unpack || (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack;
@@ -1243,8 +1243,8 @@ namespace Debugger {
     function debuggerCoroutineWrap(f: Function) {
         const thread = debuggerCoroutineCreate(f);
         /** @tupleReturn */
-        const resumer = (...args: unknown[]) => {
-            const results = coroutine.resume(thread, ...elipsisForward(args));
+        const resumer = (...args: LuaVarArg<unknown[]>) => {
+            const results = coroutine.resume(thread, ...args);
             if (!results[0]) {
                 throw results[1];
             }
@@ -1292,7 +1292,7 @@ namespace Debugger {
     const luaAssert = assert;
 
     /** @tupleReturn */
-    function debuggerAssert(v: unknown, ...args: unknown[]) {
+    function debuggerAssert(v: unknown, ...args: LuaVarArg<unknown[]>) {
         if (!v) {
             const message = args[0] !== undefined && mapSources(tostring(args[0])) || "assertion failed";
             const thread = coroutine.running() || mainThread;
@@ -1301,7 +1301,7 @@ namespace Debugger {
             skipBreakInNextTraceback = true;
             return luaError(message);
         }
-        return [v, ...elipsisForward(args)];
+        return [v, ...args];
     }
 
     export function pushHook() {
