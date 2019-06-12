@@ -30,7 +30,7 @@
         "build": "npm run build-debugger && npm run build-extension",
         "bundle": "npm run clean && npm run build && vsce package",
         "publish": "npm run bundle && vsce publish",
-        "clean": "rm debugger/*.lua && rm debugger/*.lua.map && rm extension/*.js && rm extension/*.js.map"
+        "clean": "rm -f debugger/*.lua && rm -f debugger/*.lua.map && rm -f extension/*.js && rm -f extension/*.js.map"
     },
     "dependencies": {
         "vscode-debugadapter": "^1.35.0"
