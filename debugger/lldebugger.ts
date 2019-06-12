@@ -604,7 +604,12 @@ namespace Debugger {
     const debuggerName = "lldebugger.lua";
 
     let skipBreakInNextTraceback = false;
-    let debuggerDepth = 0;
+
+    const enum HookType {
+        Global = "global",
+        Function = "function"
+    }
+    const hookStack: HookType[] = [];
 
     const threadIds = setmetatable(new LuaTable<Thread, number>(), {__mode: "k"});
     const mainThreadId = 1;
@@ -1304,17 +1309,49 @@ namespace Debugger {
         return [v, ...args];
     }
 
-    export function pushHook() {
-        ++debuggerDepth;
-        if (debuggerDepth > 1) {
+    function setErrorHandler() {
+        const hookType = hookStack[hookStack.length - 1];
+        if (hookType === HookType.Global) {
+            _G.error = debuggerError;
+            _G.assert = debuggerAssert;
+            debug.traceback = debuggerTraceback;
+        } else {
+            _G.error = luaError;
+            _G.assert = luaAssert;
+            debug.traceback = luaDebugTraceback;
+        }
+    }
+
+    export function clearHook() {
+        while (hookStack.length > 0) {
+            table.remove(hookStack);
+        }
+
+        setErrorHandler();
+
+        coroutine.create = luaCoroutineCreate;
+        coroutine.wrap = luaCoroutineWrap;
+
+        debug.sethook();
+
+        for (const [thread] of pairs(threadIds)) {
+            if (isThread(thread) && coroutine.status(thread) !== "dead") {
+                debug.sethook(thread);
+            }
+        }
+    }
+
+    export function pushHook(hookType: HookType) {
+        table.insert(hookStack, hookType);
+
+        setErrorHandler();
+
+        if (hookStack.length > 1) {
             return;
         }
 
         coroutine.create = debuggerCoroutineCreate;
         coroutine.wrap = debuggerCoroutineWrap;
-        _G.error = debuggerError;
-        _G.assert = debuggerAssert;
-        debug.traceback = debuggerTraceback;
 
         debug.sethook(debugHook, "l");
 
@@ -1325,28 +1362,12 @@ namespace Debugger {
         }
     }
 
-    export function clearHook() {
-        debuggerDepth = 0;
-
-        debug.sethook();
-
-        for (const [thread] of pairs(threadIds)) {
-            if (isThread(thread) && coroutine.status(thread) !== "dead") {
-                debug.sethook(thread);
-            }
-        }
-
-        coroutine.create = luaCoroutineCreate;
-        coroutine.wrap = luaCoroutineWrap;
-        _G.error = luaError;
-        _G.assert = luaAssert;
-        debug.traceback = luaDebugTraceback;
-    }
-
     export function popHook() {
-        --debuggerDepth;
-        if (debuggerDepth === 0) {
+        table.remove(hookStack);
+        if (hookStack.length === 0) {
             clearHook();
+        } else {
+            setErrorHandler();
         }
     }
 
@@ -1355,7 +1376,7 @@ namespace Debugger {
     }
 
     export function debugGlobal(breakImmediately?: boolean) {
-        Debugger.pushHook();
+        Debugger.pushHook(HookType.Global);
 
         if (breakImmediately) {
             Debugger.triggerBreak();
@@ -1371,7 +1392,7 @@ namespace Debugger {
 
     /** @tupleReturn */
     export function debugFunction(func: DebuggableFunction, breakImmediately: boolean | undefined, args: unknown[]) {
-        Debugger.pushHook();
+        Debugger.pushHook(HookType.Function);
 
         if (breakImmediately) {
             Debugger.triggerBreak();
