@@ -1133,7 +1133,7 @@ namespace Debugger {
         }
         if (sourceMap) {
             const lineMapping = sourceMap[line];
-            if (lineMapping && lineMapping.sourceLine === line) {
+            if (lineMapping && lineMapping.sourceLine === breakpoint.line) {
                 const sourceMapFile = sourceMap.sources[lineMapping.sourceIndex];
                 if (sourceMapFile) {
                     return comparePaths(breakpoint.file, sourceMapFile);
