@@ -35,12 +35,6 @@ declare interface LuaTableIterable<K, V> extends Array<[K, V]> {}
 declare function pairs<K, V>(this: void, t: LuaTable<K, V>): LuaTableIterable<K, V>;
 declare function pairs<T extends object>(this: void, t: T): LuaPairsIterable<T>;
 
-/** @forRange */
-declare function forRange(start: number, limit: number, step?: number): number[];
-
-/** @varArg */
-type LuaVarArg<A extends unknown[]> = A & { __luaVarArg?: never };
-
 //Enure destructuring works in all lua versions
 _G.unpack = _G.unpack || (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack;
 
@@ -212,14 +206,14 @@ namespace SourceMap
         const bits: boolean[] = [];
         for (const [c] of input.gmatch(".")) {
             let sextet = assert(base64Lookup[c]);
-            for (const i of forRange(1, 6)) {
+            for (let i = 1; i <= 6; ++i) {
                 const bit = sextet % 2 !== 0;
                 table.insert(bits, i, bit);
                 sextet = math.floor(sextet / 2);
             }
             if (bits.length >= 8) {
                 let value = 0;
-                for (const i of forRange(7, 0, -1)) {
+                for (let i = 7; i >= 0; --i) {
                     const bit = table.remove(bits);
                     if (bit) {
                         value += (2 ** i);
@@ -236,7 +230,7 @@ namespace SourceMap
         let bits: boolean[] = [];
         for (const [c] of input.gmatch(".")) {
             let sextet = assert(base64Lookup[c]);
-            for (const _ of forRange(1, 5)) {
+            for (let _ = 1; _ <= 5; ++_) {
                 const bit = sextet % 2 !== 0;
                 table.insert(bits, bit);
                 sextet = math.floor(sextet / 2);
@@ -244,7 +238,7 @@ namespace SourceMap
             const continueBit = sextet % 2 !== 0;
             if (!continueBit) {
                 let value = 0;
-                for (const i of forRange(1, bits.length - 1)) {
+                for (let i = 1; i <= bits.length - 1; ++i) {
                     if (bits[i]) {
                         value += (2 ** (i - 1));
                     }
@@ -540,7 +534,7 @@ namespace Send {
         if (kind === "indexed") {
             first = first || 1;
             const last = count && (first + count - 1) || (first + (tbl as unknown[]).length - 1);
-            for (const i of forRange(first, last)) {
+            for (let i = first; i <= last; ++i) {
                 const val = (tbl as Record<string, unknown>)[i];
                 const name = getPrintableValue(i);
                 const dbgVar = buildVariable(name, val);
@@ -642,7 +636,7 @@ namespace Debugger {
 
     function backtrace(stack: debug.FunctionInfo[], frameIndex: number) {
         const frames: LuaDebug.Frame[] = [];
-        for (const i of forRange(0, stack.length - 1)) {
+        for (let i = 0; i <= stack.length - 1; ++i) {
             const info = stack[i];
             const frame: LuaDebug.Frame = {
                 source: info.source && Path.format(info.source) || "?",
@@ -743,7 +737,7 @@ namespace Debugger {
             return ups;
         }
 
-        for (const index of forRange(1, info.nups)) {
+        for (let index = 1; index <= info.nups; ++index) {
             const [name, val] = debug.getupvalue(info.func, index);
             ups[assert(name)] = {val, index, type: type(val)};
         }
@@ -1248,7 +1242,7 @@ namespace Debugger {
     function debuggerCoroutineWrap(f: Function) {
         const thread = debuggerCoroutineCreate(f);
         /** @tupleReturn */
-        const resumer = (...args: LuaVarArg<unknown[]>) => {
+        const resumer = (...args: unknown[]) => {
             const results = coroutine.resume(thread, ...args);
             if (!results[0]) {
                 throw results[1];
@@ -1297,7 +1291,7 @@ namespace Debugger {
     const luaAssert = assert;
 
     /** @tupleReturn */
-    function debuggerAssert(v: unknown, ...args: LuaVarArg<unknown[]>) {
+    function debuggerAssert(v: unknown, ...args: unknown[]) {
         if (!v) {
             const message = args[0] !== undefined && mapSources(tostring(args[0])) || "assertion failed";
             const thread = coroutine.running() || mainThread;
