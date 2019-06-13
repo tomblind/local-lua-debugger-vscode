@@ -69,7 +69,7 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 - The Lua environment must be built with the `debug` library, and no other code should attempt to set debug hooks.
 - You cannot manually pause debugging while the program is running.
 - In Lua 5.1 and LuaJIT, the main thread cannot be accessed while stopped inside of a coroutine.
-- Most custom enviroments do not support stopping on runtime errors.
+- Some custom enviroments do not support stopping on runtime errors.
   - The debugger *will* stop on explicit calls to `error()` and `assert()`.
   - To debug a runtime error, you can wrap the code with `lldebugger.call()`:
     ```lua
