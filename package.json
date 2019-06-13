@@ -25,7 +25,7 @@
         "corona"
     ],
     "scripts": {
-        "build-debugger": "tstl -p debugger",
+        "build-debugger": "node ../TypescriptToLua-tomb/dist/tstl.js -p debugger",
         "build-extension": "tsc -p extension",
         "build": "npm run build-debugger && npm run build-extension",
         "bundle": "npm run clean && npm run build && vsce package",
