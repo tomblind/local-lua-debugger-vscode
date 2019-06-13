@@ -30,7 +30,7 @@
         "build": "npm run build-debugger && npm run build-extension",
         "bundle": "npm run clean && npm run build && vsce package",
         "publish": "npm run bundle && vsce publish",
-        "clean": "rm -f debugger/*.lua && rm -f debugger/*.lua.map && rm -f extension/*.js && rm -f extension/*.js.map"
+        "clean": "rm -f debugger/*.lua && rm -f debugger/*.lua.map && rm -f extension/*.js && rm -f extension/*.js.map && rm -f *.vsix"
     },
     "dependencies": {
         "vscode-debugadapter": "^1.35.0"
@@ -41,7 +41,7 @@
         "tslint-eslint-rules": "^5.4.0",
         "typescript": "^3.5.1",
         "typescript-to-lua": "^0.21.1",
-        "vsce": "^1.62.0",
+        "vsce": "^1.63.0",
         "vscode": "^1.1.33"
     },
     "main": "./extension/extension.js",
