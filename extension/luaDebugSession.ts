@@ -253,6 +253,8 @@ export class LuaDebugSession extends LoggingDebugSession {
         );
         this.process.on("exit", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
 
+        // this.isRunning = true; // needs message ordering to work correctly
+
         this.showOutput(`process launched`, OutputCategory.Info);
         this.sendResponse(response);
     }
@@ -493,7 +495,6 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`nextRequest`, OutputCategory.Request);
         this.variableHandles.reset();
         this.sendCommand("step");
-        this.isRunning = true;
         this.sendResponse(response);
     }
 
@@ -501,7 +502,6 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`stepInRequest`, OutputCategory.Request);
         this.variableHandles.reset();
         this.sendCommand("stepin");
-        this.isRunning = true;
         this.sendResponse(response);
     }
 
@@ -509,7 +509,6 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`stepOutRequest`, OutputCategory.Request);
         this.variableHandles.reset();
         this.sendCommand("stepout");
-        this.isRunning = true;
         this.sendResponse(response);
     }
 
