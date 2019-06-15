@@ -578,7 +578,9 @@ export class LuaDebugSession extends LoggingDebugSession {
                 if (args.context !== "watch") {
                     this.showOutput(result.error, OutputCategory.Error);
                 }
-                response.body = {result: result.error, variablesReference: 0};
+                response.success = false;
+                const msg = result.error.match(/^\[.+\]:\d+:(.+)/);
+                response.message = (msg !== null && msg.length > 1) ? msg[1] : result.error;
             }
 
         } else {
