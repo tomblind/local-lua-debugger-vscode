@@ -253,7 +253,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         );
         this.process.on("exit", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
 
-        // this.isRunning = true; // needs message ordering to work correctly
+        this.isRunning = true;
 
         this.showOutput(`process launched`, OutputCategory.Info);
         this.sendResponse(response);
@@ -297,8 +297,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     protected async threadsRequest(response: DebugProtocol.ThreadsResponse) {
         this.showOutput(`threadsRequest`, OutputCategory.Request);
 
-        this.sendCommand("threads");
-        const msg = await this.waitForMessage();
+        const msg = await this.waitForCommandResponse("threads");
 
         if (msg.type === "threads") {
             //Remove dead threads
@@ -319,7 +318,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             response.body = {threads: [...this.activeThreads.values()]};
 
         } else {
-            response.body = {threads: [new Thread(mainThreadId, "main thread")]};
+            response.success = false;
         }
 
         this.sendResponse(response);
@@ -333,8 +332,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             `stackTraceRequest ${args.startFrame}/${args.levels} (thread ${args.threadId})`, OutputCategory.Request
         );
 
-        this.sendCommand(`thread ${args.threadId}`);
-        const msg = await this.waitForMessage();
+        const msg = await this.waitForCommandResponse(`thread ${args.threadId}`);
 
         const startFrame = args.startFrame !== undefined ? args.startFrame : 0;
         const maxLevels = args.levels !== undefined ? args.levels : maxStackCount;
@@ -383,7 +381,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             response.body = {stackFrames: frames, totalFrames: msg.frames.length};
 
         } else {
-            response.body = {stackFrames: [], totalFrames: 0};
+            response.success = false;
         }
         this.sendResponse(response);
     }
@@ -392,11 +390,9 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.showOutput(`scopesRequest`, OutputCategory.Request);
 
         const {threadId, frame} = parseFrameId(args.frameId);
-        this.sendCommand(`thread ${threadId}`);
-        await this.waitForMessage();
+        await this.waitForCommandResponse(`thread ${threadId}`);
 
-        this.sendCommand(`frame ${frame}`);
-        await this.waitForMessage();
+        await this.waitForCommandResponse(`frame ${frame}`);
 
         const scopes: Scope[] = [
             new Scope("Locals", ScopeType.Local, false),
@@ -453,8 +449,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             break;
         }
 
-        this.sendCommand(cmd);
-        const vars = await this.waitForMessage();
+        const vars = await this.waitForCommandResponse(cmd);
 
         const variables: Variable[] = [];
         if (vars.type === "variables") {
@@ -476,6 +471,9 @@ export class LuaDebugSession extends LoggingDebugSession {
                 const value: LuaDebug.Value = {type: "number", value: vars.length.toString()};
                 variables.push(this.buildVariable(value, `#${baseName}`, tableLengthDisplayName));
             }
+
+        } else {
+            response.success = false;
         }
         variables.sort(sortVariables);
 
@@ -485,30 +483,45 @@ export class LuaDebugSession extends LoggingDebugSession {
 
     protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
         this.showOutput(`continueRequest`, OutputCategory.Request);
-        this.variableHandles.reset();
-        this.sendCommand("cont");
-        this.isRunning = true;
+        if (this.sendCommand("cont")) {
+            this.variableHandles.reset();
+            this.isRunning = true;
+        } else {
+            response.success = false;
+        }
         this.sendResponse(response);
     }
 
     protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
         this.showOutput(`nextRequest`, OutputCategory.Request);
-        this.variableHandles.reset();
-        this.sendCommand("step");
+        if (this.sendCommand("step")) {
+            this.variableHandles.reset();
+            this.isRunning = true;
+        } else {
+            response.success = false;
+        }
         this.sendResponse(response);
     }
 
     protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
         this.showOutput(`stepInRequest`, OutputCategory.Request);
-        this.variableHandles.reset();
-        this.sendCommand("stepin");
+        if (this.sendCommand("stepin")) {
+            this.variableHandles.reset();
+            this.isRunning = true;
+        } else {
+            response.success = false;
+        }
         this.sendResponse(response);
     }
 
     protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
         this.showOutput(`stepOutRequest`, OutputCategory.Request);
-        this.variableHandles.reset();
-        this.sendCommand("stepout");
+        if (this.sendCommand("stepout")) {
+            this.variableHandles.reset();
+            this.isRunning = true;
+        } else {
+            response.success = false;
+        }
         this.sendResponse(response);
     }
 
@@ -516,34 +529,36 @@ export class LuaDebugSession extends LoggingDebugSession {
         response: DebugProtocol.SetVariableResponse,
         args: DebugProtocol.SetVariableArguments
     ) {
+        let msg: LuaDebug.Message;
         if (args.variablesReference === ScopeType.Global
             || args.variablesReference === ScopeType.Local
             || args.variablesReference === ScopeType.Upvalue
         ) {
             this.showOutput(`setVariableRequest ${args.name} = ${args.value}`, OutputCategory.Request);
-            this.sendCommand(`exec ${args.name} = ${args.value}; return ${args.name}`);
+            msg = await this.waitForCommandResponse(`exec ${args.name} = ${args.value}; return ${args.name}`);
 
         } else if (args.name === metatableDisplayName) {
             const name = this.variableHandles.get(args.variablesReference);
             this.showOutput(`setVariableRequest ${name}[[metatable]] = ${args.value}`, OutputCategory.Request);
-            this.sendCommand(`eval setmetatable(${name}, ${args.value})`);
+            msg = await this.waitForCommandResponse(`eval setmetatable(${name}, ${args.value})`);
 
         } else if (args.name === tableLengthDisplayName) {
             const name = this.variableHandles.get(args.variablesReference);
             this.showOutput(`setVariableRequest ${name}[[length]] = ${args.value}`, OutputCategory.Request);
-            this.sendCommand(`eval #${name}`);
+            msg = await this.waitForCommandResponse(`eval #${name}`);
 
         } else {
             const name = `${this.variableHandles.get(args.variablesReference)}[${args.name}]`;
             this.showOutput(`setVariableRequest ${name} = ${args.value}`, OutputCategory.Request);
-            this.sendCommand(`exec ${name} = ${args.value}; return ${name}`);
+            msg = await this.waitForCommandResponse(`exec ${name} = ${args.value}; return ${name}`);
         }
 
-        const result = await this.getEvaluateResult(args.value);
+        const result = this.handleEvaluationResult(args.value, msg);
         if (!result.success) {
             if (result.error !== undefined) {
                 this.showOutput(result.error, OutputCategory.Error);
             }
+            response.success = false;
 
         } else {
             response.body = result;
@@ -561,25 +576,21 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         if (args.frameId !== undefined) {
             const {threadId, frame} = parseFrameId(args.frameId);
-
-            this.sendCommand(`thread ${threadId}`);
-            await this.waitForMessage();
-
-            this.sendCommand(`frame ${frame}`);
-            await this.waitForMessage();
+            await this.waitForCommandResponse(`thread ${threadId}`);
+            await this.waitForCommandResponse(`frame ${frame}`);
         }
 
-        this.sendCommand(`eval ${expression}`);
+        const msg = await this.waitForCommandResponse(`eval ${expression}`);
 
-        const result = await this.getEvaluateResult(expression);
+        const result = this.handleEvaluationResult(expression, msg);
         if (!result.success) {
             if (result.error !== undefined && args.context !== "hover") {
                 if (args.context !== "watch") {
                     this.showOutput(result.error, OutputCategory.Error);
                 }
                 response.success = false;
-                const msg = result.error.match(/^\[.+\]:\d+:(.+)/);
-                response.message = (msg !== null && msg.length > 1) ? msg[1] : result.error;
+                const errorMsg = result.error.match(/^\[.+\]:\d+:(.+)/);
+                response.message = (errorMsg !== null && errorMsg.length > 1) ? errorMsg[1] : result.error;
             }
 
         } else {
@@ -608,10 +619,10 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    private async getEvaluateResult(
-        expression: string
-    ) : Promise<{success: true; value: string; variablesReference: number} | {success: false; error?: string}> {
-        const msg = await this.waitForMessage();
+    private handleEvaluationResult(
+        expression: string,
+        msg: LuaDebug.Message
+    ) : {success: true; value: string; variablesReference: number} | {success: false; error?: string} {
         if (msg.type === "result") {
             const variablesReference = msg.result.type === "table" ? this.variableHandles.create(expression) : 0;
             const value = `${msg.result.value !== undefined ? msg.result.value : `[${msg.result.type}]`}`;
@@ -673,13 +684,11 @@ export class LuaDebugSession extends LoggingDebugSession {
         const cmd = breakpoint.condition !== undefined
             ? `break set ${filePath}:${breakpoint.line} ${breakpoint.condition}`
             : `break set ${filePath}:${breakpoint.line}`;
-        this.sendCommand(cmd);
-        return this.waitForMessage();
+        return this.waitForCommandResponse(cmd);
     }
 
     private deleteBreakpoint(filePath: string, breakpoint: DebugProtocol.SourceBreakpoint) {
-        this.sendCommand(`break delete ${filePath}:${breakpoint.line}`);
-        return this.waitForMessage();
+        return this.waitForCommandResponse(`break delete ${filePath}:${breakpoint.line}`);
     }
 
     private async onDebuggerStop(msg: LuaDebug.DebugBreak) {
@@ -688,8 +697,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (this.breakpointsPending) {
             this.breakpointsPending = false;
 
-            this.sendCommand("break clear");
-            await this.waitForMessage();
+            await this.waitForCommandResponse("break clear");
 
             for (const filePath in this.fileBreakpoints) {
                 const breakpoints = this.fileBreakpoints[filePath] as DebugProtocol.SourceBreakpoint[];
@@ -710,7 +718,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         if (this.autoContinueNext) {
             this.autoContinueNext = false;
-            this.sendCommand("cont");
+            this.assert(this.sendCommand("cont"));
 
         } else {
             const evt: DebugProtocol.StoppedEvent = new StoppedEvent("breakpoint", msg.threadId);
@@ -768,24 +776,25 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     private sendCommand(cmd: string) {
-        if (this.process === undefined) {
-            return;
+        if (this.process === undefined || this.isRunning) {
+            return false;
         }
-        if (!this.isRunning) {
-            this.showOutput(cmd, OutputCategory.Command);
-            this.assert(this.process.stdin).write(`${cmd}\n`);
-        } else {
-            this.showOutput(`skipping command: ${cmd}`, OutputCategory.Error);
-            this.handleMessage({tag: "$luaDebug", type: "error", error: "debugger is running"});
-        }
+
+        this.showOutput(cmd, OutputCategory.Command);
+        this.assert(this.process.stdin).write(`${cmd}\n`);
+        return true;
     }
 
-    private waitForMessage(): Promise<LuaDebug.Message> {
-        return new Promise(
-            resolve => {
-                this.messageHandlerQueue.push(resolve);
-            }
-        );
+    private waitForCommandResponse(cmd: string): Promise<LuaDebug.Message> {
+        if (this.sendCommand(cmd)) {
+            return new Promise(
+                resolve => {
+                    this.messageHandlerQueue.push(resolve);
+                }
+            );
+        } else {
+            return Promise.resolve({tag: "$luaDebug", type: "error", error: "Failed to send command"});
+        }
     }
 
     private showOutput(msg: string, category: OutputCategory) {
