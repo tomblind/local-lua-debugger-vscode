@@ -4,5 +4,4 @@
 **/tsconfig.json
 **/tslint.json
 .vscode
-node_modules
 .gitignore
