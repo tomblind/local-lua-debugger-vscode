@@ -2,7 +2,7 @@
     "name": "local-lua-debugger-vscode",
     "publisher": "tomblind",
     "version": "0.1.0",
-    "description": "Local Lua Debugger Visual Studio Code Extension",
+    "description": "Local Lua Debugger - simple Lua debugger with no dependencies",
     "displayName": "Local Lua Debugger",
     "icon": "resources/Lua-Logo_128x128.png",
     "repository": {
