@@ -281,17 +281,19 @@ namespace SourceMap
         let sourceLine = 1;
         let sourceColumn = 1;
         for (const [mapping, separator] of mappings.gmatch("([^;,]*)([;,]?)")) {
-            const [colOffset, sourceOffset, sourceLineOffset, sourceColOffset] = decodeBase64VLQ(mapping);
-            sourceIndex += (sourceOffset || 0);
-            sourceLine += (sourceLineOffset || 0);
-            sourceColumn += (sourceColOffset || 0);
+            if (mapping.length > 0) {
+                const [colOffset, sourceOffset, sourceLineOffset, sourceColOffset] = decodeBase64VLQ(mapping);
+                sourceIndex += (sourceOffset || 0);
+                sourceLine += (sourceLineOffset || 0);
+                sourceColumn += (sourceColOffset || 0);
 
-            const lineMapping = sourceMap[line];
-            if (!lineMapping
-                || sourceLine < lineMapping.sourceLine
-                || (sourceLine === lineMapping.sourceLine && sourceColumn < lineMapping.sourceColumn)
-            ) {
-                sourceMap[line] = {sourceIndex, sourceLine, sourceColumn};
+                const lineMapping = sourceMap[line];
+                if (!lineMapping
+                    || sourceLine < lineMapping.sourceLine
+                    || (sourceLine === lineMapping.sourceLine && sourceColumn < lineMapping.sourceColumn)
+                ) {
+                    sourceMap[line] = {sourceIndex, sourceLine, sourceColumn};
+                }
             }
 
             if (separator === ";") {
