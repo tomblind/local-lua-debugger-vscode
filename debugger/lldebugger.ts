@@ -604,6 +604,7 @@ namespace Debugger {
 
     const prompt = "";
     const debuggerName = "lldebugger.lua";
+    const builtinFunctionPrefix = "[builtin:";
 
     let skipBreakInNextTraceback = false;
 
@@ -1151,6 +1152,11 @@ namespace Debugger {
         //Ignore debugger code
         const topFrame = debug.getinfo(stackOffset, "nSluf");
         if (!topFrame || !topFrame.source || topFrame.source.sub(-debuggerName.length) === debuggerName) {
+            return;
+        }
+
+        //Ignore builtin lua functions (luajit)
+        if (topFrame.short_src && topFrame.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix) {
             return;
         }
 
