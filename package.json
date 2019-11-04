@@ -81,7 +81,8 @@
                 "initialConfigurations": [
                     {
                         "name": "Debug Lua Interpreter",
-                        "type": "local-lua",
+                        "type": "lua-local",
+                        "request": "launch",
                         "program": {
                             "lua": "lua",
                             "file": "${file}"
@@ -89,7 +90,8 @@
                     },
                     {
                         "name": "Debug Custom Lua Environment",
-                        "type": "local-lua",
+                        "type": "lua-local",
+                        "request": "launch",
                         "program": {
                             "command": "command"
                         },
