@@ -208,14 +208,10 @@ export class LuaDebugSession extends LoggingDebugSession {
         processOptions.env[envVariable] = "1";
 
         //Append lua path so it can find debugger script
-        const luaPathKey = getEnvKey(processOptions.env, "LUA_PATH");
-        let luaPath = processOptions.env[luaPathKey];
-        if (luaPath === undefined) {
-            luaPath = ";;"; //Retain defaults
-        } else if (luaPath.length > 0 && !luaPath.endsWith(";")) {
-            luaPath += ";";
-        }
-        processOptions.env[luaPathKey] = luaPath + `${this.config.extensionPath}/debugger/?.lua`;
+        this.updateLuaPath("LUA_PATH_5_2", processOptions.env, false);
+        this.updateLuaPath("LUA_PATH_5_3", processOptions.env, false);
+        this.updateLuaPath("LUA_PATH_5_4", processOptions.env, false);
+        this.updateLuaPath("LUA_PATH", processOptions.env, true);
 
         //Launch process
         let processExecutable: string;
@@ -678,6 +674,22 @@ export class LuaDebugSession extends LoggingDebugSession {
             return fullPath;
         }
         return undefined;
+    }
+
+    private updateLuaPath(pathKey: string, env: NodeJS.ProcessEnv, force: boolean) {
+        const luaPathKey = getEnvKey(env, pathKey);
+        let luaPath = env[luaPathKey];
+        if (luaPath === undefined) {
+            if (!force) {
+                return;
+            }
+            luaPath = ";;"; //Retain defaults
+
+        } else if (luaPath.length > 0 && !luaPath.endsWith(";")) {
+            luaPath += ";";
+        }
+
+        env[luaPathKey] = luaPath + `${this.assert(this.config).extensionPath}/debugger/?.lua`;
     }
 
     private setBreakpoint(filePath: string, breakpoint: DebugProtocol.SourceBreakpoint) {
