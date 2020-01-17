@@ -211,7 +211,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         const luaPathKey = getEnvKey(processOptions.env, "LUA_PATH");
         let luaPath = processOptions.env[luaPathKey];
         if (luaPath === undefined) {
-            luaPath = "";
+            luaPath = ";;"; //Retain defaults
         } else if (luaPath.length > 0 && !luaPath.endsWith(";")) {
             luaPath += ";";
         }
