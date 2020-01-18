@@ -1,3 +1,6 @@
+## Version 0.1.5
+Fixed path formatting on windows when custom lua interpreter uses forward slashes
+
 ## Version 0.1.4
 Fixed issues with package search paths
 - Default lua paths are now correctly retained when `LUA_PATH` is not set
