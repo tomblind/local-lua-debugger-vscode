@@ -98,9 +98,9 @@ namespace Path {
 
     /** @tupleReturn */
     export function splitDrive(path: string) {
-        let [drive, pathPart] = path.match(`^[@=]?([a-zA-Z]:[\\/])(.*)`);
+        let [drive, pathPart] = path.match(`^[@=]?([a-zA-Z]:)[\\/](.*)`);
         if (drive) {
-            drive = drive.upper();
+            drive = drive.upper() + separator;
         } else {
             [drive, pathPart] = path.match(`^[@=]?([\\/]*)(.*)`);
         }
