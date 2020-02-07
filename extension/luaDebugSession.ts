@@ -783,6 +783,11 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.process = undefined;
         this.isRunning = false;
 
+        if (this.outputText.length > 0) {
+            this.showOutput(this.outputText, OutputCategory.StdOut);
+            this.outputText = "";
+        }
+
         this.showOutput(`debugging ended: ${result}`, category);
         this.sendEvent(new TerminatedEvent());
     }
