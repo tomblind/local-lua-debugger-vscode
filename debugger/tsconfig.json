@@ -6,7 +6,8 @@
         "keyofStringsOnly": true,
         "typeRoots": [],
         "noLib": true,
-        "sourceMap": true
+        "sourceMap": true,
+        "rootDir": "."
     },
     "include": [
         "./**/*.ts"
@@ -14,7 +15,10 @@
     "tstl":
     {
         "luaTarget": "5.1",
+        "noImplicitSelf": true,
         "noHeader": true,
-        "noHoisting": true
+        "noHoisting": true,
+        "luaBundle": "lldebugger.lua",
+        "luaBundleEntry": "lldebugger.ts"
     }
 }
