@@ -1,6 +1,6 @@
 //MIT License
 //
-//Copyright (c) 2019 Tom Blind
+//Copyright (c) 2020 Tom Blind
 //
 //Permission is hereby granted, free of charge, to any person obtaining a copy
 //of this software and associated documentation files (the "Software"), to deal
@@ -723,21 +723,21 @@ declare namespace string {
      *
      *      x = string.gsub("hello world", "(%w+)", "%1 %1")
      *      -->; x="hello hello world world"
-     *      
+     *
      *      x = string.gsub("hello world", "%w+", "%0 %0", 1)
      *      -->; x="hello hello world"
-     *      
+     *
      *      x = string.gsub("hello world from Lua", "(%w+)%s*(%w+)", "%2 %1")
      *      -->; x="world hello Lua from"
-     *      
+     *
      *      x = string.gsub("home = $HOME, user = $USER", "%$(%w+)", os.getenv)
      *      -->; x="home = /home/roberto, user = roberto"
-     *      
+     *
      *      x = string.gsub("4+5 = $return 4+5$", "%$(.-)%$", function (s)
      *            return loadstring(s)()
      *          end)
      *      -->; x="4+5 = 9"
-     *      
+     *
      *      local t = {name="lua", version="5.1"}
      *      x = string.gsub("$name-$version.tar.gz", "%$(%w+)", t)
      *      -->; x="lua-5.1.tar.gz"
@@ -1076,9 +1076,9 @@ declare namespace io {
     export function popen(this: void, prog: string, mode?: "r" | "w"): [LuaFile] | [undefined, string];
 
     export type FileReadFormat = "*n" | "*a" | "*l" | number;
-    
+
     export type FileReadFormatType<F extends FileReadFormat> = F extends "*n" ? number : string;
-    
+
     export type FileReadFormatTypeTuple<A extends FileReadFormat[]> = {
         [I in keyof A]: A[I] extends "*n" ? number : string
     };
@@ -1238,7 +1238,7 @@ declare namespace os {
         sec?: number;
         isdst?: boolean;
     }
-    
+
     export interface Date extends Time {
         hour: number;
         min: number;
@@ -1712,21 +1712,21 @@ declare interface String {
      *
      *      x = string.gsub("hello world", "(%w+)", "%1 %1")
      *      -->; x="hello hello world world"
-     *      
+     *
      *      x = string.gsub("hello world", "%w+", "%0 %0", 1)
      *      -->; x="hello hello world"
-     *      
+     *
      *      x = string.gsub("hello world from Lua", "(%w+)%s*(%w+)", "%2 %1")
      *      -->; x="world hello Lua from"
-     *      
+     *
      *      x = string.gsub("home = $HOME, user = $USER", "%$(%w+)", os.getenv)
      *      -->; x="home = /home/roberto, user = roberto"
-     *      
+     *
      *      x = string.gsub("4+5 = $return 4+5$", "%$(.-)%$", function (s)
      *            return loadstring(s)()
      *          end)
      *      -->; x="4+5 = 9"
-     *      
+     *
      *      local t = {name="lua", version="5.1"}
      *      x = string.gsub("$name-$version.tar.gz", "%$(%w+)", t)
      *      -->; x="lua-5.1.tar.gz"
