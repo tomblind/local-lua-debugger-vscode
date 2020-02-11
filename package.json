@@ -33,16 +33,16 @@
         "clean": "rm -f debugger/*.lua && rm -f debugger/*.lua.map && rm -f extension/*.js && rm -f extension/*.js.map && rm -f *.vsix"
     },
     "dependencies": {
-        "vscode-debugadapter": "^1.35.0"
+        "vscode-debugadapter": "^1.38.0"
     },
     "devDependencies": {
-        "@types/node": "^12.0.4",
-        "tslint": "^5.17.0",
+        "@types/node": "^13.7.1",
+        "tslint": "^6.0.0",
         "tslint-eslint-rules": "^5.4.0",
-        "typescript": "^3.5.1",
-        "typescript-to-lua": "^0.22.1",
-        "vsce": "^1.65.0",
-        "vscode": "^1.1.33"
+        "typescript": "^3.7.5",
+        "typescript-to-lua": "^0.31.0",
+        "vsce": "^1.73.0",
+        "vscode": "^1.1.36"
     },
     "main": "./extension/extension.js",
     "engines": {

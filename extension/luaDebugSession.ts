@@ -739,7 +739,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         }
     }
 
-    private handleMessage(msg: LuaDebug.Message) {
+    private handleDebugMessage(msg: LuaDebug.Message) {
         const handler = this.messageHandlerQueue.shift();
         if (handler !== undefined) {
             handler(msg);
@@ -762,7 +762,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             if (msg.type === "debugBreak") {
                 debugBreak = msg;
             } else {
-                this.handleMessage(msg);
+                this.handleDebugMessage(msg);
             }
         }
 
