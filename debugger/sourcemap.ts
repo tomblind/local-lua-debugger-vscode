@@ -103,7 +103,7 @@ export namespace SourceMap
         return values;
     }
 
-    function build(data: string) {
+    function build(data: string, mapDir: string) {
         const [sources] = data.match('"sources"%s*:%s*(%b[])');
         const [mappings] = data.match('"mappings"%s*:%s*"([^"]+)"');
         const [sourceRoot] = data.match('"sourceRoot"%s*:%s*"([^"]+)"');
@@ -115,7 +115,7 @@ export namespace SourceMap
 
         for (let [source] of sources.gmatch('"([^"]+)"')) {
             if (sourceRoot) {
-                source = `${sourceRoot}${Path.separator}${source}`;
+                source = `${mapDir}${Path.separator}${sourceRoot}${Path.separator}${source}`;
             }
             table.insert(sourceMap.sources, Path.getAbsolute(source));
         }
@@ -159,12 +159,13 @@ export namespace SourceMap
             sourceMap = false;
 
             //Look for map file
+            const mapDir = Path.dirName(file);
             const mapFile = file + ".map";
             let [f] = io.open(mapFile);
             if (f) {
                 const data = f.read("*a");
                 f.close();
-                sourceMap = build(data) || false;
+                sourceMap = build(data, mapDir) || false;
 
             //Look for inline map
             } else {
@@ -177,7 +178,7 @@ export namespace SourceMap
                     );
                     if (encodedMap) {
                         const map = base64Decode(encodedMap);
-                        sourceMap = build(map) || false;
+                        sourceMap = build(map, mapDir) || false;
                     }
                 }
             }

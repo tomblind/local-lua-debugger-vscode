@@ -37,9 +37,17 @@ export namespace Path {
     export function getCwd() {
         if (!cwd) {
             const [p] = io.popen(separator === "\\" && "cd" || "pwd");
-            cwd = p && p.read("*a") || "";
+            if (p) {
+                [cwd] = p.read("*a").match("^%s*(.-)%s*$");
+            }
+            cwd = cwd || "";
         }
         return cwd;
+    }
+
+    export function dirName(path: string) {
+        const [dir] = path.match(`^(.-)${separator}+[^${separator}]+$`);
+        return dir || "";
     }
 
     /** @tupleReturn */
