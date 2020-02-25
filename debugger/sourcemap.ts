@@ -106,18 +106,20 @@ export namespace SourceMap
     function build(data: string, mapDir: string) {
         const [sources] = data.match('"sources"%s*:%s*(%b[])');
         const [mappings] = data.match('"mappings"%s*:%s*"([^"]+)"');
-        const [sourceRoot] = data.match('"sourceRoot"%s*:%s*"([^"]+)"');
+        let [sourceRoot] = data.match('"sourceRoot"%s*:%s*"([^"]+)"');
         if (!mappings || !sources) {
             return undefined;
         }
 
         const sourceMap: SourceMap = {sources: []};
 
-        for (let [source] of sources.gmatch('"([^"]+)"')) {
-            if (sourceRoot) {
-                source = `${mapDir}${Path.separator}${sourceRoot}${Path.separator}${source}`;
-            }
-            table.insert(sourceMap.sources, Path.getAbsolute(source));
+        if (sourceRoot === undefined || sourceRoot.length === 0) {
+            sourceRoot = ".";
+        }
+
+        for (const [source] of sources.gmatch('"([^"]+)"')) {
+            const sourcePath = `${mapDir}${Path.separator}${sourceRoot}${Path.separator}${source}`;
+            table.insert(sourceMap.sources, Path.getAbsolute(sourcePath));
         }
 
         let line = 1;
