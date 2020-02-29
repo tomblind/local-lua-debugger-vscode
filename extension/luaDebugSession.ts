@@ -815,17 +815,17 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     private showOutput(msg: string, category: OutputCategory) {
-        if (category === OutputCategory.StdOut || category === OutputCategory.StdErr) {
-            msg = msg.trim();
-            if (msg.length > 0) {
-                this.sendEvent(new OutputEvent(`${msg}\n`, category));
-            }
+        if (msg.length === 0) {
+            return;
+
+        } else if (category === OutputCategory.StdOut || category === OutputCategory.StdErr) {
+            this.sendEvent(new OutputEvent(msg, category));
 
         } else if (category === OutputCategory.Error) {
-            this.sendEvent(new OutputEvent(`[${category}] ${msg}\n`, "stderr"));
+            this.sendEvent(new OutputEvent(`\n[${category}] ${msg}\n`, "stderr"));
 
         } else if (this.config !== undefined && this.config.verbose === true) {
-            this.sendEvent(new OutputEvent(`[${category}] ${msg}\n`));
+            this.sendEvent(new OutputEvent(`\n[${category}] ${msg}\n`));
         }
     }
 

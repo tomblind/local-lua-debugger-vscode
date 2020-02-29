@@ -57,7 +57,7 @@ export namespace Send {
     }
 
     function send(message: LuaDebug.MessageBase) {
-        io.write(Format.asJson(message) + "\n");
+        io.write(Format.asJson(message));
     }
 
     export function error(err: string) {
