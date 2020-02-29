@@ -1,3 +1,7 @@
+## Version 0.1.6
+- Fixed issues with output parsing, including hangups and incorrect newlines
+- Fixed issues with paths in source maps
+
 ## Version 0.1.5
 Fixed path formatting on windows when custom lua interpreter uses forward slashes
 
