@@ -37,12 +37,12 @@
     },
     "devDependencies": {
         "@types/node": "^13.7.1",
-        "tslint": "^6.0.0",
+        "@types/vscode": "^1.44.0",
+        "tslint": "^5.0.0",
         "tslint-eslint-rules": "^5.4.0",
         "typescript": "^3.7.5",
         "typescript-to-lua": "^0.31.0",
-        "vsce": "^1.73.0",
-        "vscode": "^1.1.36"
+        "vsce": "^1.73.0"
     },
     "main": "./extension/extension.js",
     "engines": {
