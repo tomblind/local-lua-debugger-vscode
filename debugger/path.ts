@@ -47,7 +47,7 @@ export namespace Path {
 
     export function dirName(path: string) {
         const [dir] = path.match(`^(.-)${separator}+[^${separator}]+$`);
-        return dir || "";
+        return dir || ".";
     }
 
     /** @tupleReturn */
