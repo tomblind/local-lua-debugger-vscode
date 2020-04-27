@@ -1,3 +1,7 @@
+## Version 0.1.7
+- Fixed issues with finding source maps when environment supplies only filenames
+- Updated some npm packages for security vulnerabilities
+
 ## Version 0.1.6
 - Fixed issues with output parsing, including hangups and incorrect newlines
 - Fixed issues with paths in source maps
