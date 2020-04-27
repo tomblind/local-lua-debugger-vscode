@@ -45,19 +45,6 @@ export function stop() {
     Debugger.clearHook();
 }
 
-//Load and debug the specified file
-/** @tupleReturn */
-export function runFile(filePath: unknown, breakImmediately?: boolean, ...args: unknown[]) {
-    if (typeof filePath !== "string") {
-        throw `expected string as first argument to runFile, but got '${type(filePath)}'`;
-    }
-    if (breakImmediately !== undefined && typeof breakImmediately !== "boolean") {
-        throw `expected boolean as second argument to runFile, but got '${type(breakImmediately)}'`;
-    }
-    const [func] = assert(...loadfile(filePath));
-    return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, args);
-}
-
 //Call and debug the specified function
 /** @tupleReturn */
 export function call(func: unknown, breakImmediately?: boolean, ...args: unknown[]) {
