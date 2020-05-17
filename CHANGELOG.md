@@ -1,3 +1,7 @@
+## Version 0.1.8
+- Suppport for debugging threads not created by coroutine.creae/wrap (fixes torch luajit)
+- Fixed infinite recursion when debugger assert fails
+
 ## Version 0.1.7
 - Fixed issues with finding source maps when environment supplies only filenames
 - Updated some npm packages for security vulnerabilities
