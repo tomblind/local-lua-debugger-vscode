@@ -70,7 +70,10 @@ export namespace Debugger {
     const mainThreadId = 1;
     threadIds.set(mainThread, mainThreadId);
     let nextThreadId = mainThreadId + 1;
-    let getThreadId: { (thread: Thread): number };
+
+    function getThreadId(thread: Thread) {
+        return luaAssert(threadIds.get(thread));
+    }
 
     // For Lua 5.2+
     /** @tupleReturn */
@@ -705,10 +708,6 @@ export namespace Debugger {
         return threadId;
     }
 
-    getThreadId = function(thread: Thread) {
-        return threadIds.get(thread) || registerThread(thread as LuaThread);
-    };
-
     function debuggerCoroutineCreate(f: Function) {
         const thread = luaCoroutineCreate(f);
         registerThread(thread);
@@ -817,6 +816,11 @@ export namespace Debugger {
 
         coroutine.create = debuggerCoroutineCreate;
         coroutine.wrap = debuggerCoroutineWrap;
+
+        const thread = coroutine.running();
+        if (thread && !threadIds.get(thread)) {
+            registerThread(thread);
+        }
 
         debug.sethook(debugHook, "l");
 
