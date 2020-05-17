@@ -22,3 +22,6 @@
 
 export const luaAssert = _G.assert;
 export const luaError = _G.error;
+export const luaCoroutineWrap = coroutine.wrap;
+export const luaDebugTraceback = debug.traceback;
+export const luaCoroutineCreate = coroutine.create;
