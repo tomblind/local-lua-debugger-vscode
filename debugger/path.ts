@@ -20,6 +20,8 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
+import {luaAssert} from "./luafuncs";
+
 export namespace Path {
     export const separator = (() => {
         const config = (_G.package as typeof _G["package"] & Record<"config", string>).config;
@@ -58,7 +60,7 @@ export namespace Path {
         } else {
             [drive, pathPart] = path.match(`^[@=]?([\\/]*)(.*)`);
         }
-        return [assert(drive), assert(pathPart)];
+        return [luaAssert(drive), luaAssert(pathPart)];
     }
 
     const formattedPathCache: Record<string, string> = {};
@@ -68,7 +70,7 @@ export namespace Path {
         if (!formattedPath) {
             const [drive, pathOnly] = splitDrive(path);
             const pathParts: string[] = [];
-            for (const [part] of assert(pathOnly).gmatch("[^\\/]+")) {
+            for (const [part] of luaAssert(pathOnly).gmatch("[^\\/]+")) {
                 if (part !== ".") {
                     if (part === ".." && pathParts.length > 0 && pathParts[pathParts.length - 1] !== "..") {
                         table.remove(pathParts);

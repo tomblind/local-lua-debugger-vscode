@@ -20,6 +20,7 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
+import {luaAssert, luaError} from "./luafuncs";
 import {Path} from "./path";
 import {SourceMap} from "./sourcemap";
 import {Send} from "./send";
@@ -100,7 +101,7 @@ export namespace Debugger {
             const info = stack[i];
             const frame: LuaDebug.Frame = {
                 source: info.source && Path.format(info.source) || "?",
-                line: info.currentline && assert(tonumber(info.currentline)) || -1
+                line: info.currentline && luaAssert(tonumber(info.currentline)) || -1
             };
             if (info.source && info.currentline) {
                 const sourceMap = SourceMap.get(frame.source);
@@ -108,7 +109,7 @@ export namespace Debugger {
                     const lineMapping = sourceMap[frame.line];
                     if (lineMapping) {
                         frame.mappedLocation = {
-                            source: assert(sourceMap.sources[lineMapping.sourceIndex]),
+                            source: luaAssert(sourceMap.sources[lineMapping.sourceIndex]),
                             line: lineMapping.sourceLine,
                             column: lineMapping.sourceColumn
                         };
@@ -199,7 +200,7 @@ export namespace Debugger {
 
         for (const index of forRange(1, info.nups)) {
             const [name, val] = debug.getupvalue(info.func, index);
-            ups[assert(name)] = {val, index, type: type(val)};
+            ups[luaAssert(name)] = {val, index, type: type(val)};
         }
 
         return ups;
@@ -268,7 +269,7 @@ export namespace Debugger {
                 }
             }
             for (const [_, up] of pairs(ups)) {
-                debug.setupvalue(assert(info.func), up.index, up.val);
+                debug.setupvalue(luaAssert(info.func), up.index, up.val);
             }
         }
         return [success as true, result];
@@ -323,7 +324,7 @@ export namespace Debugger {
         let frame = 0;
         let currentThread = activeThread;
         let currentStack = activeStack;
-        let info = assert(currentStack[frame]);
+        let info = luaAssert(currentStack[frame]);
         while (true) {
             const inp = getInput();
             if (!inp || inp === "quit") {
@@ -365,7 +366,7 @@ export namespace Debugger {
             } else if (inp.sub(1, 6) === "thread") {
                 const [newThreadIdStr] = inp.match("^thread%s+(%d+)$");
                 if (newThreadIdStr !== undefined) {
-                    const newThreadId = assert(tonumber(newThreadIdStr));
+                    const newThreadId = luaAssert(tonumber(newThreadIdStr));
                     let newThread: Thread | undefined;
                     for (const [thread, threadId] of pairs(threadIds)) {
                         if (threadId === newThreadId) {
@@ -395,7 +396,7 @@ export namespace Debugger {
                         frameOffset = currentThread === activeThread
                             && activeThreadFrameOffset
                             || inactiveThreadFrameOffset;
-                        info = assert(currentStack[frame]);
+                        info = luaAssert(currentStack[frame]);
                         backtrace(currentStack, frame);
                     } else {
                         Send.error("Bad thread id");
@@ -425,10 +426,10 @@ export namespace Debugger {
             } else if (inp.sub(1, 5) === "frame") {
                 const [newFrameStr] = inp.match("^frame%s+(%d+)$");
                 if (newFrameStr !== undefined) {
-                    const newFrame = assert(tonumber(newFrameStr));
+                    const newFrame = luaAssert(tonumber(newFrameStr));
                     if (newFrame !== undefined && newFrame > 0 && newFrame <= currentStack.length) {
                         frame = newFrame - 1;
-                        info = assert(currentStack[frame]);
+                        info = luaAssert(currentStack[frame]);
                         backtrace(currentStack, frame);
                     } else {
                         Send.error("Bad frame");
@@ -465,7 +466,7 @@ export namespace Debugger {
                     let lineStr: string | undefined;
                     [file, lineStr] = inp.match("^break%s+[a-z]+%s+(.-):(%d+)");
                     if (file !== undefined && lineStr !== undefined) {
-                        line = assert(tonumber(lineStr));
+                        line = luaAssert(tonumber(lineStr));
                         breakpoint = Breakpoint.get(file, line);
                     }
                 }
@@ -473,7 +474,7 @@ export namespace Debugger {
                     if (file !== undefined && line !== undefined) {
                         const [condition] = inp.match("^break%s+[a-z]+%s+.-:%d+%s+(.+)");
                         Breakpoint.add(file, line, condition);
-                        breakpoint = assert(Breakpoint.get(file, line));
+                        breakpoint = luaAssert(Breakpoint.get(file, line));
                         Send.breakpoints([breakpoint]);
                     } else {
                         Send.error("Bad breakpoint");
@@ -624,7 +625,7 @@ export namespace Debugger {
                 stepBreak = breakInThread !== mainThread && coroutine.status(breakInThread as LuaThread) === "dead";
             }
             if (stepBreak) {
-                Send.debugBreak("step", "step", assert(threadIds.get(activeThread)));
+                Send.debugBreak("step", "step", luaAssert(threadIds.get(activeThread)));
                 debugBreak(activeThread, stackOffset);
                 return;
             }
@@ -636,7 +637,7 @@ export namespace Debugger {
             return;
         }
 
-        const source = Path.format(assert(topFrame.source));
+        const source = Path.format(luaAssert(topFrame.source));
         const sourceMap = SourceMap.get(source);
         for (const breakpoint of breakpoints) {
             if (breakpoint.enabled && checkBreakpoint(breakpoint, source, topFrame.currentline, sourceMap)) {
@@ -648,7 +649,7 @@ export namespace Debugger {
                         Send.debugBreak(
                             `breakpoint hit: "${breakpoint.file}:${breakpoint.line}", ${conditionDisplay}`,
                             "breakpoint",
-                            assert(threadIds.get(activeThread))
+                            luaAssert(threadIds.get(activeThread))
                         );
                         debugBreak(activeThread, stackOffset);
                         break;
@@ -657,7 +658,7 @@ export namespace Debugger {
                     Send.debugBreak(
                         `breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`,
                         "breakpoint",
-                        assert(threadIds.get(activeThread))
+                        luaAssert(threadIds.get(activeThread))
                     );
                     debugBreak(activeThread, stackOffset);
                     break;
@@ -670,7 +671,7 @@ export namespace Debugger {
     function mapSource(indent: string, file: string, lineStr: string, remainder: string) {
         const sourceMap = SourceMap.get(file);
         if (sourceMap) {
-            const line = assert(tonumber(lineStr));
+            const line = luaAssert(tonumber(lineStr));
             const lineMapping = sourceMap[line];
             if (lineMapping) {
                 const sourceFile = sourceMap.sources[lineMapping.sourceIndex];
@@ -710,7 +711,7 @@ export namespace Debugger {
         const resumer = (...args: LuaVarArg<unknown[]>) => {
             const results = coroutine.resume(thread, ...args);
             if (!results[0]) {
-                throw results[1];
+                luaError(results[1]);
             }
             return unpack(results, 2);
         };
@@ -734,7 +735,7 @@ export namespace Debugger {
             skipBreakInNextTraceback = false;
         } else {
             const thread = isThread(threadOrMessage) && threadOrMessage || coroutine.running() || mainThread;
-            Send.debugBreak(trace || "error", "error", assert(threadIds.get(thread)));
+            Send.debugBreak(trace || "error", "error", luaAssert(threadIds.get(thread)));
             debugBreak(thread, 3);
         }
 
@@ -742,25 +743,21 @@ export namespace Debugger {
     }
 
     //error replacement for catching errors
-    const luaError = error;
-
     function debuggerError(message: string, level?: number) {
         message = mapSources(message);
         const thread = coroutine.running() || mainThread;
-        Send.debugBreak(message, "error", assert(threadIds.get(thread)));
+        Send.debugBreak(message, "error", luaAssert(threadIds.get(thread)));
         debugBreak(thread, 2);
         skipBreakInNextTraceback = true;
         return luaError(message, level);
     }
-
-    const luaAssert = assert;
 
     /** @tupleReturn */
     function debuggerAssert(v: unknown, ...args: LuaVarArg<unknown[]>) {
         if (!v) {
             const message = args[0] !== undefined && mapSources(tostring(args[0])) || "assertion failed";
             const thread = coroutine.running() || mainThread;
-            Send.debugBreak(message, "error", assert(threadIds.get(thread)));
+            Send.debugBreak(message, "error", luaAssert(threadIds.get(thread)));
             debugBreak(thread, 2);
             skipBreakInNextTraceback = true;
             return luaError(message);
@@ -845,7 +842,7 @@ export namespace Debugger {
     function onError(err: unknown) {
         const msg = mapSources(tostring(err));
         const thread = coroutine.running() || mainThread;
-        Send.debugBreak(msg, "error", assert(threadIds.get(thread)));
+        Send.debugBreak(msg, "error", luaAssert(threadIds.get(thread)));
         debugBreak(thread, 2);
     }
 
