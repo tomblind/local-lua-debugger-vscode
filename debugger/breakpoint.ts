@@ -39,6 +39,14 @@ export namespace Breakpoint {
         return current;
     }
 
+    export function getLines(): {[key: number]: boolean} {
+        const ret: {[key: number]: boolean} = {};
+        for (const [_, breakpoint] of ipairs(current)) {
+            ret[breakpoint.line] = true;
+        }
+        return ret;
+    }
+
     export function add(file: string, line: number, condition?: string) {
         table.insert(current, {file: Path.format(file), line, enabled: true, condition});
     }
