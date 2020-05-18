@@ -20,15 +20,33 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
+// Lua 5.2+ versions
+declare function rawlen<T extends object>(this: void, v: T | string): number;
+
+/** @tupleReturn */
+declare function load(
+	this: void,
+	chunk: string,
+	chunkname?: string,
+	mode?: "b" | "t" | "bt",
+	env?: Object
+): [{ (this: void): unknown }, undefined] | [undefined, string];
+
+/** @tupleReturn */
+declare function loadfile(
+	this: void,
+	filename?: string,
+	mode?: "b" | "t" | "bt",
+	env?: unknown
+): [{ (this: void): unknown; }, undefined] | [undefined, string];
+
 export const luaAssert = _G.assert;
 export const luaError = _G.error;
 export const luaCoroutineWrap = coroutine.wrap;
 export const luaDebugTraceback = debug.traceback;
 export const luaCoroutineCreate = coroutine.create;
 
-//Added in lua 5.2
-declare function rawlen<T extends object>(this: void, v: T | string): number;
-export const luaRawLen = rawlen || function rawlen<T extends object>(v: T | string): number {
+export const luaRawLen = rawlen || function<T extends object>(v: T | string): number {
 	const mt = getmetatable(v);
 	if (!mt || !(mt as {__len?: unknown}).__len) {
 		return (v as unknown[]).length;
@@ -38,5 +56,37 @@ export const luaRawLen = rawlen || function rawlen<T extends object>(v: T | stri
 			++len;
 		}
 		return len - 1;
+	}
+}
+
+interface Env {
+	[name: string]: unknown;
+}
+
+/** @tupleReturn */
+export function loadLuaString(str: string, env?: Env): [{ (this: void): unknown }, undefined] | [undefined, string] {
+	if (setfenv) {
+		const [f, e] = loadstring(str, str);
+		if (f && env) {
+			setfenv(f, env);
+		}
+		return [f, e] as [{ (this: void): unknown }, undefined] | [undefined, string];
+
+	} else {
+		return load(str, str, "t", env);
+	}
+}
+
+/** @tupleReturn */
+export function loadLuaFile(filename: string, env?: Env): [{ (this: void): unknown }, undefined] | [undefined, string] {
+	if (setfenv) {
+		const [f, e] = loadfile(filename);
+		if (f && env) {
+			setfenv(f, env);
+		}
+		return [f, e] as [{ (this: void): unknown }, undefined] | [undefined, string];
+
+	} else {
+		return loadfile(filename, "t", env);
 	}
 }

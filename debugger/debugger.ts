@@ -20,7 +20,7 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
-import {luaAssert, luaError, luaCoroutineCreate, luaCoroutineWrap, luaDebugTraceback} from "./luafuncs";
+import {luaAssert, luaError, luaCoroutineCreate, luaCoroutineWrap, luaDebugTraceback, loadLuaString} from "./luafuncs";
 import {Path} from "./path";
 import {SourceMap} from "./sourcemap";
 import {Send} from "./send";
@@ -45,10 +45,6 @@ export interface Locals {
 }
 
 export namespace Debugger {
-    interface Env {
-        [name: string]: unknown;
-    }
-
     /** @tupleReturn */
     export interface DebuggableFunction {
         (this: void, ...args: unknown[]): unknown[];
@@ -73,30 +69,6 @@ export namespace Debugger {
 
     function getThreadId(thread: Thread) {
         return luaAssert(threadIds.get(thread));
-    }
-
-    // For Lua 5.2+
-    /** @tupleReturn */
-    declare function load(
-        this: void,
-        chunk: string,
-        chunkname?: string,
-        mode?: "b" | "t" | "bt",
-        env?: Object
-    ): [{ (this: void): unknown }, undefined] | [undefined, string];
-
-    /** @tupleReturn */
-    function loadCode(code: string, env?: Env): [{ (this: void): unknown }, undefined] | [undefined, string] {
-        if (setfenv) {
-            const [f, e] = loadstring(code, code);
-            if (f && env) {
-                setfenv(f, env);
-            }
-            return [f, e] as [{ (this: void): unknown }, undefined] | [undefined, string];
-
-        } else {
-            return load(code, code, "t", env);
-        }
     }
 
     function backtrace(stack: debug.FunctionInfo[], frameIndex: number) {
@@ -258,7 +230,7 @@ export namespace Debugger {
             }
         );
 
-        const [func, err] = loadCode(statement, env);
+        const [func, err] = loadLuaString(statement, env);
         if (!func) {
             return [false, err as string];
         }
