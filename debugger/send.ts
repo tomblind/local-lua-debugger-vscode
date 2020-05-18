@@ -20,6 +20,7 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
+import {luaRawLen} from "./luafuncs";
 import {Format} from "./format";
 import {Locals, Vars} from "./debugger";
 import {Thread, mainThread, mainThreadName} from "./thread";
@@ -38,8 +39,8 @@ export namespace Send {
         }
     }
 
-    function isElementKey(tbl: object, key: unknown) {
-        return typeof key === "number" && key >= 1 && key <= (tbl as unknown[]).length;
+    function isElementKey(tbl: object, tblLen: number, key: unknown) {
+        return typeof key === "number" && key >= 1 && key <= tblLen;
     }
 
     function buildVariable(name: string, value: unknown) {
@@ -50,7 +51,7 @@ export namespace Send {
         };
 
         if (typeof value === "object") {
-            dbgVar.length = (value as unknown[]).length;
+            dbgVar.length = luaRawLen(value as object);
         }
 
         return dbgVar;
@@ -134,7 +135,7 @@ export namespace Send {
         };
         if (kind === "indexed") {
             first = first || 1;
-            const last = count && (first + count - 1) || (first + (tbl as unknown[]).length - 1);
+            const last = count && (first + count - 1) || (first + luaRawLen(tbl) - 1);
             for (const i of forRange(first, last)) {
                 const val = (tbl as Record<string, unknown>)[i];
                 const name = getPrintableValue(i);
@@ -143,8 +144,9 @@ export namespace Send {
             }
 
         } else {
+            const len = luaRawLen(tbl);
             for (const [key, val] of pairs(tbl)) {
-                if (kind !== "named" || !isElementKey(tbl, key)) {
+                if (kind !== "named" || !isElementKey(tbl, len, key)) {
                     const name = getPrintableValue(key);
                     const dbgVar = buildVariable(name, val);
                     table.insert(dbgProperties.properties, dbgVar);
@@ -154,7 +156,6 @@ export namespace Send {
             if (meta) {
                 dbgProperties.metatable = {type: type(meta), value: getPrintableValue(meta)};
             }
-            const len = (tbl as unknown[]).length;
             if (len > 0 || (dbgProperties.properties.length === 0 && !dbgProperties.metatable)) {
                 dbgProperties.length = len;
             }

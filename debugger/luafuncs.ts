@@ -25,3 +25,18 @@ export const luaError = _G.error;
 export const luaCoroutineWrap = coroutine.wrap;
 export const luaDebugTraceback = debug.traceback;
 export const luaCoroutineCreate = coroutine.create;
+
+//Added in lua 5.2
+declare function rawlen<T extends object>(this: void, v: T | string): number;
+export const luaRawLen = rawlen || function rawlen<T extends object>(v: T | string): number {
+	const mt = getmetatable(v);
+	if (!mt || !(mt as {__len?: unknown}).__len) {
+		return (v as unknown[]).length;
+	} else {
+		let len = 1;
+		while ((v as any)[len]) {
+			++len;
+		}
+		return len - 1;
+	}
+}
