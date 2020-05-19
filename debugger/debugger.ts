@@ -597,11 +597,12 @@ export namespace Debugger {
         return false;
     }
 
-    function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
+    function stepHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
         const stackOffset = 2;
+        const topFrame = debug.getinfo(stackOffset, "nSluf");
+        const activeThread = coroutine.running() || mainThread;
 
         //Ignore debugger code
-        const topFrame = debug.getinfo(stackOffset, "nSluf");
         if (!topFrame || !topFrame.source || topFrame.source.sub(-debuggerName.length) === debuggerName) {
             return;
         }
@@ -610,8 +611,6 @@ export namespace Debugger {
         if (topFrame.short_src && topFrame.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix) {
             return;
         }
-
-        const activeThread = coroutine.running() || mainThread;
 
         //Stepping
         if (breakAtDepth >= 0) {
@@ -629,6 +628,14 @@ export namespace Debugger {
                 return;
             }
         }
+
+        runhook(event, line);
+    }
+
+    function runhook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
+        const stackOffset = 2;
+        const topFrame = debug.getinfo(stackOffset, "nSluf");
+        const activeThread = coroutine.running() || mainThread;
 
         //Breakpoints
         const breakpoints = Breakpoint.getAll();
@@ -695,8 +702,8 @@ export namespace Debugger {
         threadIds.set(thread, nextThreadId);
         ++nextThreadId;
         const [hook] = debug.gethook();
-        if (hook === debugHook) {
-            debug.sethook(thread, debugHook, "l");
+        if (hook === runhook) {
+            debug.sethook(thread, runhook, "l");
         }
         return thread;
     }
@@ -812,11 +819,11 @@ export namespace Debugger {
         coroutine.create = debuggerCoroutineCreate;
         coroutine.wrap = debuggerCoroutineWrap;
 
-        debug.sethook(debugHook, "l");
+        debug.sethook(runhook, "l");
 
         for (const [thread] of pairs(threadIds)) {
             if (isThread(thread) && coroutine.status(thread) !== "dead") {
-                debug.sethook(thread, debugHook, "l");
+                debug.sethook(thread, runhook, "l");
             }
         }
     }
