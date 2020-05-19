@@ -620,6 +620,51 @@ export namespace Debugger {
         return false;
     }
 
+    function checkAllBreakPoint(stackOffset: number, line: number) {
+        if (!breakPointLines[line]) {
+            return;
+        }
+        ++stackOffset;
+
+        const topFrame = debug.getinfo(stackOffset, "nSluf");
+        const activeThread = coroutine.running() || mainThread;
+
+        if (!topFrame.currentline) {
+            return;
+        }
+
+        //Breakpoints
+        const breakpoints = Breakpoint.getAll();
+        const source = Path.format(assert(topFrame.source));
+        const sourceMap = SourceMap.get(source);
+        for (const breakpoint of breakpoints) {
+            if (breakpoint.enabled && checkBreakpoint(breakpoint, source, topFrame.currentline, sourceMap)) {
+                if (breakpoint.condition) {
+                    const condition = "return " + breakpoint.condition;
+                    const [success, result] = execute(condition, activeThread, 0, stackOffset, topFrame);
+                    if (success && result) {
+                        const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
+                        Send.debugBreak(
+                            `breakpoint hit: "${breakpoint.file}:${breakpoint.line}", ${conditionDisplay}`,
+                            "breakpoint",
+                            assert(threadIds.get(activeThread))
+                        );
+                        debugBreak(activeThread, stackOffset);
+                        break;
+                    }
+                } else {
+                    Send.debugBreak(
+                        `breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`,
+                        "breakpoint",
+                        assert(threadIds.get(activeThread))
+                    );
+                    debugBreak(activeThread, stackOffset);
+                    break;
+                }
+            }
+        }
+    }
+
     function stepHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
         const activeThread = coroutine.running() || mainThread;
 
@@ -641,51 +686,11 @@ export namespace Debugger {
             }
         }
 
-        runHook(event, line);
+        checkAllBreakPoint(topFrameStackOffset, line as number);
     }
 
     function runHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
-        if (!breakPointLines[line as number]) {
-            return;
-        }
-
-        const topFrame = debug.getinfo(topFrameStackOffset, "nSluf");
-        const activeThread = coroutine.running() || mainThread;
-        const breakpoints = Breakpoint.getAll();
-
-        if (!topFrame.currentline) {
-            return;
-        }
-
-        //Breakpoints
-        const source = Path.format(assert(topFrame.source));
-        const sourceMap = SourceMap.get(source);
-        for (const breakpoint of breakpoints) {
-            if (breakpoint.enabled && checkBreakpoint(breakpoint, source, topFrame.currentline, sourceMap)) {
-                if (breakpoint.condition) {
-                    const condition = "return " + breakpoint.condition;
-                    const [success, result] = execute(condition, activeThread, 0, topFrameStackOffset, topFrame);
-                    if (success && result) {
-                        const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
-                        Send.debugBreak(
-                            `breakpoint hit: "${breakpoint.file}:${breakpoint.line}", ${conditionDisplay}`,
-                            "breakpoint",
-                            assert(threadIds.get(activeThread))
-                        );
-                        debugBreak(activeThread, topFrameStackOffset);
-                        break;
-                    }
-                } else {
-                    Send.debugBreak(
-                        `breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`,
-                        "breakpoint",
-                        assert(threadIds.get(activeThread))
-                    );
-                    debugBreak(activeThread, topFrameStackOffset);
-                    break;
-                }
-            }
-        }
+        checkAllBreakPoint(topFrameStackOffset, line as number);
     }
 
     //Convert source paths to mapped
