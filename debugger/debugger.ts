@@ -331,6 +331,7 @@ export namespace Debugger {
                 os.exit(0);
 
             } else if (inp === "cont" || inp === "continue") {
+                setHook(runHook);
                 break;
 
             } else if (inp === "help") {
@@ -408,16 +409,19 @@ export namespace Debugger {
             } else if (inp === "step") {
                 breakAtDepth = activeStack.length;
                 breakInThread = activeThread;
+                setHook(stepHook);
                 break;
 
             } else if (inp === "stepin") {
                 breakAtDepth = math.huge;
                 breakInThread = undefined;
+                setHook(stepHook);
                 break;
 
             } else if (inp === "stepout") {
                 breakAtDepth = activeStack.length - 1;
                 breakInThread = activeThread;
+                setHook(stepHook);
                 break;
 
             } else if (inp === "stack") {
@@ -636,10 +640,10 @@ export namespace Debugger {
             }
         }
 
-        runhook(event, line);
+        runHook(event, line);
     }
 
-    function runhook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
+    function runHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
         if (!breakPointLines[line as number]) {
             return;
         }
@@ -713,8 +717,8 @@ export namespace Debugger {
         threadIds.set(thread, nextThreadId);
         ++nextThreadId;
         const [hook] = debug.gethook();
-        if (hook === runhook) {
-            debug.sethook(thread, runhook, "l");
+        if (hook === runHook) {
+            debug.sethook(thread, runHook, "l");
         }
         return thread;
     }
@@ -842,7 +846,7 @@ export namespace Debugger {
         coroutine.create = debuggerCoroutineCreate;
         coroutine.wrap = debuggerCoroutineWrap;
 
-        setHook(runhook);
+        setHook(runHook);
     }
 
     export function popHook() {
@@ -856,6 +860,10 @@ export namespace Debugger {
 
     export function triggerBreak() {
         breakAtDepth = math.huge;
+        breakInThread = undefined;
+        if (hookStack.length > 0) {
+            setHook(stepHook);
+        }
     }
 
     export function debugGlobal(breakImmediately?: boolean) {
