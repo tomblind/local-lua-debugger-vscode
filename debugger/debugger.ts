@@ -604,6 +604,8 @@ export namespace Debugger {
         return false;
     }
 
+    const topFrameStackOffset = 2;
+
     function isIgnoreStepBreak(topFrame: debug.FunctionInfo): boolean {
         //Ignore debugger code
         if (!topFrame || !topFrame.source || topFrame.source.sub(-debuggerName.length) === debuggerName) {
@@ -619,23 +621,22 @@ export namespace Debugger {
     }
 
     function stepHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
-        const stackOffset = 2;
-        const topFrame = debug.getinfo(stackOffset, "nSluf");
         const activeThread = coroutine.running() || mainThread;
 
         //Stepping
-        if (breakAtDepth >= 0 && !isIgnoreStepBreak(topFrame)) {
-            let stepBreak: boolean;
-            if (!breakInThread) {
-                stepBreak = true;
-            } else if (activeThread === breakInThread) {
-                stepBreak = getStack(stackOffset).length <= breakAtDepth;
-            } else {
-                stepBreak = breakInThread !== mainThread && coroutine.status(breakInThread as LuaThread) === "dead";
-            }
-            if (stepBreak) {
+        let stepBreak: boolean;
+        if (!breakInThread) {
+            stepBreak = true;
+        } else if (activeThread === breakInThread) {
+            stepBreak = getStack(topFrameStackOffset).length <= breakAtDepth;
+        } else {
+            stepBreak = breakInThread !== mainThread && coroutine.status(breakInThread as LuaThread) === "dead";
+        }
+        if (stepBreak) {
+            const topFrame = debug.getinfo(topFrameStackOffset, "nSluf");
+            if (!isIgnoreStepBreak(topFrame)) {
                 Send.debugBreak("step", "step", assert(threadIds.get(activeThread)));
-                debugBreak(activeThread, stackOffset);
+                debugBreak(activeThread, topFrameStackOffset);
                 return;
             }
         }
@@ -648,23 +649,22 @@ export namespace Debugger {
             return;
         }
 
-        const stackOffset = 2;
-        const topFrame = debug.getinfo(stackOffset, "nSluf");
+        const topFrame = debug.getinfo(topFrameStackOffset, "nSluf");
         const activeThread = coroutine.running() || mainThread;
-
-        //Breakpoints
         const breakpoints = Breakpoint.getAll();
-        if (!topFrame.currentline || breakpoints.length === 0) {
+
+        if (!topFrame.currentline) {
             return;
         }
 
+        //Breakpoints
         const source = Path.format(assert(topFrame.source));
         const sourceMap = SourceMap.get(source);
         for (const breakpoint of breakpoints) {
             if (breakpoint.enabled && checkBreakpoint(breakpoint, source, topFrame.currentline, sourceMap)) {
                 if (breakpoint.condition) {
                     const condition = "return " + breakpoint.condition;
-                    const [success, result] = execute(condition, activeThread, 0, stackOffset, topFrame);
+                    const [success, result] = execute(condition, activeThread, 0, topFrameStackOffset, topFrame);
                     if (success && result) {
                         const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
                         Send.debugBreak(
@@ -672,7 +672,7 @@ export namespace Debugger {
                             "breakpoint",
                             assert(threadIds.get(activeThread))
                         );
-                        debugBreak(activeThread, stackOffset);
+                        debugBreak(activeThread, topFrameStackOffset);
                         break;
                     }
                 } else {
@@ -681,7 +681,7 @@ export namespace Debugger {
                         "breakpoint",
                         assert(threadIds.get(activeThread))
                     );
-                    debugBreak(activeThread, stackOffset);
+                    debugBreak(activeThread, topFrameStackOffset);
                     break;
                 }
             }
