@@ -794,6 +794,24 @@ export namespace Debugger {
         }
     }
 
+    function setHook(hook?: debug.Hook) {
+        if (!!hook) {
+            debug.sethook(hook, "l");
+        } else {
+            debug.sethook();
+        }
+
+        for (const [thread] of pairs(threadIds)) {
+            if (isThread(thread) && coroutine.status(thread) !== "dead") {
+                if (!!hook) {
+                    debug.sethook(thread, hook, "l");
+                } else {
+                    debug.sethook(thread);
+                }
+            }
+        }
+    }
+
     export function clearHook() {
         while (hookStack.length > 0) {
             table.remove(hookStack);
@@ -804,13 +822,7 @@ export namespace Debugger {
         coroutine.create = luaCoroutineCreate;
         coroutine.wrap = luaCoroutineWrap;
 
-        debug.sethook();
-
-        for (const [thread] of pairs(threadIds)) {
-            if (isThread(thread) && coroutine.status(thread) !== "dead") {
-                debug.sethook(thread);
-            }
-        }
+        setHook();
     }
 
     export function pushHook(hookType: HookType) {
@@ -825,13 +837,7 @@ export namespace Debugger {
         coroutine.create = debuggerCoroutineCreate;
         coroutine.wrap = debuggerCoroutineWrap;
 
-        debug.sethook(runhook, "l");
-
-        for (const [thread] of pairs(threadIds)) {
-            if (isThread(thread) && coroutine.status(thread) !== "dead") {
-                debug.sethook(thread, runhook, "l");
-            }
-        }
+        setHook(runhook);
     }
 
     export function popHook() {
