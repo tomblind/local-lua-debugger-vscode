@@ -309,6 +309,7 @@ export namespace Debugger {
 
     let breakAtDepth = -1;
     let breakInThread: Thread | undefined;
+    let breakPointLines: {[key: number]: boolean} = {};
 
     function debugBreak(activeThread: Thread, stackOffset: number) {
         ++stackOffset;
@@ -639,6 +640,10 @@ export namespace Debugger {
     }
 
     function runhook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
+        if (!breakPointLines[line as number]) {
+            return;
+        }
+
         const stackOffset = 2;
         const topFrame = debug.getinfo(stackOffset, "nSluf");
         const activeThread = coroutine.running() || mainThread;
