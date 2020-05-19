@@ -567,6 +567,8 @@ export namespace Debugger {
                 Send.error("Bad command");
             }
         }
+
+        breakPointLines = Breakpoint.getLines();
     }
 
     function comparePaths(a: string, b: string) {
@@ -597,23 +599,27 @@ export namespace Debugger {
         return false;
     }
 
+    function isIgnoreStepBreak(topFrame: debug.FunctionInfo): boolean {
+        //Ignore debugger code
+        if (!topFrame || !topFrame.source || topFrame.source.sub(-debuggerName.length) === debuggerName) {
+            return true;
+        }
+
+        //Ignore builtin lua functions (luajit)
+        if (topFrame.short_src && topFrame.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix) {
+            return true;
+        }
+
+        return false;
+    }
+
     function stepHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
         const stackOffset = 2;
         const topFrame = debug.getinfo(stackOffset, "nSluf");
         const activeThread = coroutine.running() || mainThread;
 
-        //Ignore debugger code
-        if (!topFrame || !topFrame.source || topFrame.source.sub(-debuggerName.length) === debuggerName) {
-            return;
-        }
-
-        //Ignore builtin lua functions (luajit)
-        if (topFrame.short_src && topFrame.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix) {
-            return;
-        }
-
         //Stepping
-        if (breakAtDepth >= 0) {
+        if (breakAtDepth >= 0 && !isIgnoreStepBreak(topFrame)) {
             let stepBreak: boolean;
             if (!breakInThread) {
                 stepBreak = true;
