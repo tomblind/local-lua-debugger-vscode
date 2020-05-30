@@ -20,6 +20,7 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
+import {luaAssert, loadLuaFile} from "./luafuncs";
 import {Debugger} from "./debugger";
 
 //Ensure destructuring works in all lua versions
@@ -54,7 +55,8 @@ export function runFile(filePath: unknown, breakImmediately?: boolean, ...args: 
     if (breakImmediately !== undefined && typeof breakImmediately !== "boolean") {
         throw `expected boolean as second argument to runFile, but got '${type(breakImmediately)}'`;
     }
-    const [func] = assert(...loadfile(filePath));
+    const env = setmetatable({arg: args}, {__index: _G});
+    const [func] = luaAssert(...loadLuaFile(filePath, env));
     return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, args);
 }
 

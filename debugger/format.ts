@@ -20,6 +20,8 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
+import {luaRawLen} from "./luafuncs";
+
 export namespace Format {
     export const arrayTag = {} as "$arrayTag";
 
@@ -55,17 +57,17 @@ export namespace Format {
         return escaped;
     }
 
-    function isArray(val: unknown) {
+    function isArray(val: object) {
         if ((val as ExplicitArray)[arrayTag]) {
             return true;
         }
 
-        const len = (val as unknown[]).length;
+        const len = luaRawLen(val);
         if (len === 0) {
             return false;
         }
 
-        for (const [k] of pairs(val as object)) {
+        for (const [k] of pairs(val)) {
             if (typeof k !== "number" || k > len) {
                 return false;
             }
@@ -80,7 +82,7 @@ export namespace Format {
         if (valType === "table" && !tables.get(val)) {
             tables.set(val, true);
 
-            if (isArray(val)) {
+            if (isArray(val as object)) {
                 const arrayVals: string[] = [];
                 for (const [_, arrayVal] of ipairs(val as unknown[])) {
                     const valStr = asJson(arrayVal, indent + 1, tables);

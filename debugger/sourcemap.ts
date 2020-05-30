@@ -20,6 +20,7 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
+import {luaAssert} from "./luafuncs";
 import {Path} from "./path";
 
 export interface SourceLineMapping {
@@ -55,7 +56,7 @@ export namespace SourceMap
         const results: string[] = [];
         const bits: boolean[] = [];
         for (const [c] of input.gmatch(".")) {
-            let sextet = assert(base64Lookup[c]);
+            let sextet = luaAssert(base64Lookup[c]);
             for (const i of forRange(1, 6)) {
                 const bit = sextet % 2 !== 0;
                 table.insert(bits, i, bit);
@@ -79,7 +80,7 @@ export namespace SourceMap
         const values: number[] = [];
         let bits: boolean[] = [];
         for (const [c] of input.gmatch(".")) {
-            let sextet = assert(base64Lookup[c]);
+            let sextet = luaAssert(base64Lookup[c]);
             for (const _ of forRange(1, 5)) {
                 const bit = sextet % 2 !== 0;
                 table.insert(bits, bit);
