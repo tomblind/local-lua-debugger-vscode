@@ -17,7 +17,6 @@
         "luaTarget": "5.1",
         "noImplicitSelf": true,
         "noHeader": true,
-        "noHoisting": true,
         "luaBundle": "lldebugger.lua",
         "luaBundleEntry": "lldebugger.ts"
     }
