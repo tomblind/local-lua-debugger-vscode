@@ -701,7 +701,7 @@ export namespace Debugger {
 
         const [hook] = debug.gethook();
         if (hook === runHook || hook === stepHook) {
-            debug.sethook(thread, runHook, "l");
+            debug.sethook(thread, hook, "l");
         }
 
         return threadId;
