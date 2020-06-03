@@ -43,14 +43,11 @@ export namespace Format {
         ["\\"]: "\\\\",
         ["\b"]: "\\b",
         ["\f"]: "\\f",
-        ["\t"]: "\\t"
+        ["\t"]: "\\t",
+        ["\0"]: "\\u0000"
     };
 
-    let escapesPattern = "";
-    for (const [e] of pairs(escapes)) {
-        escapesPattern += e;
-    }
-    escapesPattern = `[${escapesPattern}]`;
+    const escapesPattern = "[\n\r\"\\\b\f\t%z]";
 
     function escape(str: string) {
         const [escaped] = str.gsub(escapesPattern, escapes);
