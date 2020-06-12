@@ -809,9 +809,9 @@ export namespace Debugger {
         coroutine.create = debuggerCoroutineCreate;
         coroutine.wrap = debuggerCoroutineWrap;
 
-        const thread = coroutine.running();
-        if (thread && !threadIds.get(thread)) {
-            registerThread(thread);
+        const currentThread = coroutine.running();
+        if (currentThread && !threadIds.get(currentThread)) {
+            registerThread(currentThread);
         }
 
         debug.sethook(debugHook, "l");
