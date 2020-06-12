@@ -700,20 +700,30 @@ export namespace Debugger {
         return resumer;
     }
 
-    //debug.traceback replacement for catching errors
+    //debug.traceback replacement for catching errors and mapping sources
     function debuggerTraceback(
         threadOrMessage?: LuaThread | string,
         messageOrLevel?: string | number,
         level?: number
     ): string {
-        let trace = luaDebugTraceback(threadOrMessage as LuaThread, messageOrLevel as string, level as number);
+        let trace: string;
+        if (isThread(threadOrMessage)) {
+            trace = luaDebugTraceback(threadOrMessage, (messageOrLevel as string) || "", (level || 1) + 1);
+        } else {
+            trace = luaDebugTraceback(threadOrMessage || "", ((messageOrLevel as number) || 1) + 1);
+        }
         if (trace) {
             trace = mapSources(trace);
         }
 
         if (skipBreakInNextTraceback) {
             skipBreakInNextTraceback = false;
-        } else {
+
+        //Break if debugging globally and traceback was not called manually from scripts
+        } else if (
+            hookStack[hookStack.length - 1] === HookType.Global
+            && debug.getinfo(2, "S").what === "C"
+        ) {
             const thread = isThread(threadOrMessage) && threadOrMessage || coroutine.running() || mainThread;
             Send.debugBreak(trace || "error", "error", getThreadId(thread));
             debugBreak(thread, 3);
@@ -750,10 +760,13 @@ export namespace Debugger {
         if (hookType === HookType.Global) {
             _G.error = debuggerError;
             _G.assert = debuggerAssert;
-            debug.traceback = debuggerTraceback;
         } else {
             _G.error = luaError;
             _G.assert = luaAssert;
+        }
+        if (hookType !== undefined) {
+            debug.traceback = debuggerTraceback;
+        } else {
             debug.traceback = luaDebugTraceback;
         }
     }
