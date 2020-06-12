@@ -730,7 +730,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         if (this.autoContinueNext) {
             this.autoContinueNext = false;
-            this.assert(this.sendCommand("cont"));
+            this.assert(this.sendCommand("autocont"));
 
         } else {
             const evt: DebugProtocol.StoppedEvent = new StoppedEvent("breakpoint", msg.threadId);

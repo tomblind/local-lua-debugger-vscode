@@ -309,10 +309,14 @@ export namespace Debugger {
             } else if (inp === "cont" || inp === "continue") {
                 break;
 
+            } else if (inp === "autocont" || inp === "autocontinue") {
+                return false; //Check breakpoints before resuming
+
             } else if (inp === "help") {
                 Send.help(
                     ["help", "show available commands"],
                     ["cont|continue", "continue execution"],
+                    ["autocont|autocontinue", "continue execution if not stopped at a breakpoint"],
                     ["quit", "stop program and debugger"],
                     ["step", "step to next line"],
                     ["stepin", "step in to current line"],
@@ -544,6 +548,8 @@ export namespace Debugger {
                 Send.error("Bad command");
             }
         }
+
+        return true; //Resume execution immediately without checking breakpoints
     }
 
     function comparePaths(a: string, b: string) {
@@ -602,8 +608,9 @@ export namespace Debugger {
             }
             if (stepBreak) {
                 Send.debugBreak("step", "step", getThreadId(activeThread));
-                debugBreak(activeThread, stackOffset);
-                return;
+                if (debugBreak(activeThread, stackOffset)) {
+                    return;
+                }
             }
         }
 
