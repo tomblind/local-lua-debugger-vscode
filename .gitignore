@@ -1,7 +1,6 @@
 **/*.vsix
-**/*.lua
-*.lua.map
-**/*.js
-**/*.js.map
+debugger/**/*.lua
+debugger/*.lua.map
+extension/**/*.js
+extension/**/*.js.map
 node_modules
-.vscode

@@ -1,0 +1,64 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build Debugger",
+			"type": "npm",
+			"group": "build",
+			"script": "build-debugger",
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "Build Extension",
+			"type": "npm",
+			"group": "build",
+			"script": "build-extension",
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "Bundle",
+			"type": "npm",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"script": "bundle",
+			"problemMatcher": [
+				"$tsc"
+			],
+			"dependsOn": "Clean"
+		},
+		{
+			"label": "Clean",
+			"type": "npm",
+			"script": "clean",
+			"problemMatcher": []
+		},
+		{
+			"label": "Build Debugger (TSTL HEAD)",
+			"type": "shell",
+			"group": "build",
+			"command": "node",
+			"args": [
+				"../TypescriptToLua/dist/tstl.js",
+				"-p",
+				"debugger"
+			],
+			"problemMatcher": [
+				"$tsc"
+			]
+		},
+		{
+			"label": "Build",
+			"type": "npm",
+			"script": "build",
+			"problemMatcher": [
+				"$tsc"
+			]
+		}
+	]
+}
