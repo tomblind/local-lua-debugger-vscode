@@ -52,7 +52,7 @@ export const luaRawLen = rawlen || function<T extends object>(v: T | string): nu
         return (v as unknown[]).length;
     } else {
         let len = 1;
-        while ((v as any)[len]) {
+        while (rawget(v as Record<string, unknown>, len as unknown as string)) {
             ++len;
         }
         return len - 1;
