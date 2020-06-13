@@ -1,0 +1,45 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Lua 5.1",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "lua5.1",
+                "file": "${workspaceFolder}/main.lua"
+            },
+            "verbose": true
+        },
+        {
+            "name": "Lua 5.2",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "lua52",
+                "file": "${workspaceFolder}/main.lua"
+            },
+            "verbose": true
+        },
+        {
+            "name": "Lua 5.3",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "lua53",
+                "file": "${workspaceFolder}/main.lua"
+            },
+            "verbose": true
+        },
+        {
+            "name": "LuaJit",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "luajit",
+                "file": "${workspaceFolder}/main.lua"
+            },
+            "verbose": true
+        },
+    ]
+}

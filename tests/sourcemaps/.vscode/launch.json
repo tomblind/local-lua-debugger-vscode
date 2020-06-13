@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "lua",
+                "file": "${workspaceFolder}/lua/main.lua"
+            },
+            "cwd": "${workspaceFolder}/lua",
+            "verbose": true
+        }
+    ]
+}

@@ -1,0 +1,13 @@
+{
+    "compilerOptions": {
+        "sourceMap": true,
+        "rootDir": "ts",
+        "outDir": "lua"
+    },
+    "include": [
+        "ts/**/*.ts"
+	],
+	"tstl": {
+		"noHeader": true
+	}
+}

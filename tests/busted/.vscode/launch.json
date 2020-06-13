@@ -1,0 +1,29 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Busted CLI",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "command": "busted"
+            },
+            "args": [
+                "${workspaceFolder}/test/start-cli.lua"
+            ],
+            "verbose": true
+        },
+        {
+            "name": "Debug Busted via Lua Interpreter",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "command": "lua"
+            },
+            "args": [
+                "${workspaceFolder}/test/start-interpreter.lua"
+            ],
+            "verbose": true
+        }
+    ]
+}
