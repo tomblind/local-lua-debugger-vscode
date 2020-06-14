@@ -1,3 +1,9 @@
+## Version 0.1.10
+- Fixed breakpoints set on first line of code
+- Fixed handling of null bytes in strings
+- Preventing false error break when `debug.traceback` is called by lua scripts
+- Various other small bug fixes
+
 ## Version 0.1.9
 - Fixed issue with tables that have custom len operator
 - Fixed passing `arg` to files being debugged
