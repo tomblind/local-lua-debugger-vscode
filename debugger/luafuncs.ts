@@ -59,7 +59,7 @@ export const luaRawLen = rawlen || function<T extends object>(v: T | string): nu
     }
 }
 
-interface Env {
+export interface Env {
     [name: string]: unknown;
 }
 
@@ -88,5 +88,25 @@ export function loadLuaFile(filename: string, env?: Env): [{ (this: void): unkno
 
     } else {
         return loadfile(filename, "t", env);
+    }
+}
+
+export function luaGetEnv(level: number, thread?: LuaThread) {
+    const info = thread && debug.getinfo(thread, level + 1, "f") || debug.getinfo(level + 1, "f");
+    const func = assert(info.func);
+    if (getfenv) {
+        return getfenv(func) as Env | undefined;
+    } else {
+        let i = 1;
+        while (true) {
+            const [name, value] = debug.getupvalue(func, i);
+            if (!name) {
+                break;
+            }
+            if (name === "_ENV") {
+                return value as Env;
+            }
+            ++i;
+        }
     }
 }

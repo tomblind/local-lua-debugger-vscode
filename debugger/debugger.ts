@@ -20,7 +20,15 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
-import {luaAssert, luaError, luaCoroutineCreate, luaCoroutineWrap, luaDebugTraceback, loadLuaString} from "./luafuncs";
+import {
+    luaAssert,
+    luaError,
+    luaCoroutineCreate,
+    luaCoroutineWrap,
+    luaDebugTraceback,
+    loadLuaString,
+    luaGetEnv
+} from "./luafuncs";
 import {Path} from "./path";
 import {SourceMap} from "./sourcemap";
 import {Send} from "./send";
@@ -182,12 +190,25 @@ export namespace Debugger {
         return ups;
     }
 
-    function getGlobals(): Vars {
-        const globs: Vars = {};
-        for (const [key, val] of pairs(_G)) {
+    function populateGlobals(globs: Vars, tbl: Record<string, unknown>, metaStack: LuaTable<unknown, boolean>) {
+        metaStack.set(tbl, true);
+
+        const meta = getmetatable(tbl) as Record<string, unknown> | undefined;
+        if (meta !== undefined && type(meta.__index) === "table" && metaStack.get(meta) === undefined) {
+            populateGlobals(globs, meta.__index as Record<string, unknown>, metaStack);
+        }
+
+        for (const [key, val] of pairs(tbl)) {
             const name = tostring(key);
             globs[name] = {val, type: type(val)};
         }
+    }
+
+    function getGlobals(level: number, thread: Thread): Vars {
+        const globs: Vars = {};
+        const fenv = luaGetEnv(level, isThread(thread) && thread || undefined) || _G;
+        const metaStack = new LuaTable<unknown, boolean>();
+        populateGlobals(globs, fenv, metaStack);
         return globs;
     }
 
@@ -207,6 +228,7 @@ export namespace Debugger {
         const level = (thread === (activeThread || mainThread)) && (frame + frameOffset + 1) || frame;
         const locs = getLocals(level + 1, thread);
         const ups = getUpvalues(info);
+        const fenv = luaGetEnv(level, isThread(thread) && thread || undefined) || _G;
         const env = setmetatable(
             {},
             {
@@ -215,7 +237,7 @@ export namespace Debugger {
                     if (variable !== undefined) {
                         return variable.val;
                     } else {
-                        return _G[name];
+                        return fenv[name];
                     }
                 },
                 __newindex(this: unknown, name: string, val: unknown) {
@@ -224,7 +246,7 @@ export namespace Debugger {
                         variable.type = type(val);
                         variable.val = val;
                     } else {
-                        _G[name] = val;
+                        fenv[name] = val;
                     }
                 }
             }
@@ -427,7 +449,7 @@ export namespace Debugger {
                 Send.vars(ups);
 
             } else if (inp === "globals") {
-                const globs = getGlobals();
+                const globs = getGlobals(frame + frameOffset + 1, currentThread);
                 Send.vars(globs);
 
             } else if (inp.sub(1, 5) === "break") {
