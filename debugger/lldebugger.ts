@@ -48,16 +48,16 @@ export function stop() {
 
 //Load and debug the specified file
 /** @tupleReturn */
-export function runFile(filePath: unknown, breakImmediately?: boolean, ...args: unknown[]) {
+export function runFile(filePath: unknown, breakImmediately?: boolean, arg?: object) {
     if (typeof filePath !== "string") {
         throw `expected string as first argument to runFile, but got '${type(filePath)}'`;
     }
     if (breakImmediately !== undefined && typeof breakImmediately !== "boolean") {
         throw `expected boolean as second argument to runFile, but got '${type(breakImmediately)}'`;
     }
-    const env = setmetatable({arg: args}, {__index: _G});
+    const env = setmetatable({arg}, {__index: _G});
     const [func] = luaAssert(...loadLuaFile(filePath, env));
-    return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, args);
+    return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, arg as unknown[]);
 }
 
 //Call and debug the specified function
