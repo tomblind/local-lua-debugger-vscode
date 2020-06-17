@@ -583,7 +583,7 @@ export namespace Debugger {
 
     const topFrameStackOffset = 2;
 
-    function isIgnoreStepBreak(topFrame: debug.FunctionInfo): boolean {
+    function ignoreStepBreak(topFrame: debug.FunctionInfo): boolean {
         //Ignore debugger code
         if (!topFrame || !topFrame.source || topFrame.source.sub(-debuggerName.length) === debuggerName) {
             return true;
