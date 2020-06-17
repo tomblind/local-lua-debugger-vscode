@@ -794,7 +794,7 @@ export namespace Debugger {
 
         for (const [thread] of pairs(threadIds)) {
             if (isThread(thread) && coroutine.status(thread) !== "dead") {
-                if (!!hook) {
+                if (hook !== undefined) {
                     debug.sethook(thread, hook, "l");
                 } else {
                     debug.sethook(thread);
