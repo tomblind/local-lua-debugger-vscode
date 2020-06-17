@@ -40,7 +40,7 @@ export namespace Breakpoint {
     }
 
     export function getLines(): {[key: number]: boolean} {
-        const ret: {[key: number]: boolean} = {};
+        const lines: {[key: number]: boolean} = {};
         for (const [_, breakpoint] of ipairs(current)) {
             ret[breakpoint.line] = true;
         }
@@ -65,4 +65,3 @@ export namespace Breakpoint {
         current = [];
     }
 }
-
