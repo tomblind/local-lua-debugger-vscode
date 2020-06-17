@@ -597,7 +597,7 @@ export namespace Debugger {
         return false;
     }
 
-    function checkAllBreakPoint(stackOffset: number, line: number) {
+    function checkAllBreakPoints(stackOffset: number, line: number) {
         if (!breakPointLines[line]) {
             return;
         }
