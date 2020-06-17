@@ -786,7 +786,7 @@ export namespace Debugger {
     }
 
     function setHook(hook?: debug.Hook) {
-        if (!!hook) {
+        if (hook !== undefined) {
             debug.sethook(hook, "l");
         } else {
             debug.sethook();
