@@ -103,7 +103,14 @@
                         "properties": {
                             "sourceRoot": {
                                 "type": "string",
-                                "description": "Root path of source mapped files"
+                                "description": "Root path of source map files"
+                            },
+                            "scriptRoots": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Alternate paths to find lua scripts"
                             },
                             "verbose": {
                                 "type": "boolean",

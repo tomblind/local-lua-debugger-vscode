@@ -670,13 +670,31 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (filePath.length === 0) {
             return undefined;
         }
+
         if (path.isAbsolute(filePath)) {
             return fs.existsSync(filePath) ? filePath : undefined;
         }
-        const fullPath = path.resolve(this.assert(this.config).cwd, filePath);
+
+        const config = this.assert(this.config);
+        let fullPath = path.resolve(config.cwd, filePath);
         if (fs.existsSync(fullPath)) {
             return fullPath;
         }
+
+        if (config.scriptRoots === undefined) {
+            return undefined;
+        }
+        for (const rootPath of config.scriptRoots) {
+            if (path.isAbsolute(rootPath)) {
+                fullPath = path.resolve(rootPath, filePath);
+            } else {
+                fullPath = path.resolve(config.cwd, rootPath, filePath);
+            }
+            if (fs.existsSync(fullPath)) {
+                return fullPath;
+            }
+        }
+
         return undefined;
     }
 

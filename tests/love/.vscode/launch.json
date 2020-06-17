@@ -9,9 +9,11 @@
                 "command": "love"
             },
             "args": [
-                "${workspaceFolder}/game"
+                "game"
             ],
-            "cwd": "${workspaceFolder}/game",
+            "scriptRoots": [
+                "game"
+            ],
             "verbose": true
         }
     ]
