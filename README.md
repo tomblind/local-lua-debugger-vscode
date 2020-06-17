@@ -4,7 +4,7 @@ A simple Lua debugger which requires no additional dependencies.
 
 ---
 ## Features
-- Debug Lua using stand-alone interpretor or a custom executables
+- Debug Lua using stand-alone interpretor or a custom executable
 - Supports Lua versions 5.1, 5.2, 5.3 and [LuaJIT](https://luajit.org/)
 - Basic debugging features (stepping, inspecting, breakpoints, etc...)
 - Conditional breakpoints
@@ -64,19 +64,11 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 ---
 ## Requirements & Limitations
 - The Lua environment must support communication via stdio.
-  - Some enviroments may require command line options to support this.
-  - Ex. the Corona Simulator requires the `/no-console` flag.
+  - Some enviroments may require command line options to support this (ex. Corona requires `/no-console` flag)
+  - Use of `io.read` or other calls that require user input will cause problems
 - The Lua environment must be built with the `debug` library, and no other code should attempt to set debug hooks.
 - You cannot manually pause debugging while the program is running.
 - In Lua 5.1 and LuaJIT, the main thread cannot be accessed while stopped inside of a coroutine.
-- Some custom enviroments do not support stopping on runtime errors.
-  - The debugger *will* stop on explicit calls to `error()` and `assert()`.
-  - To debug a runtime error, you can wrap the code with `lldebugger.call()`:
-    ```lua
-    require("lldebugger").call(function()
-      --code causing runtime error
-    end)
-    ```
 
 ---
 ## Tips
@@ -86,3 +78,122 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
       require("lldebugger").start()
     end
     ```
+- Some custom environments will not break on uncaught runtime errors. To catch a runtime error, you can wrap the code with `lldebugger.call()`:
+    ```lua
+    require("lldebugger").call(function()
+      --code causing runtime error
+    end)
+    ```
+
+---
+## Additional Configuration Options
+- **`sourceRoot`**
+  - Specify an alternate location for original source files when using source maps.
+- **`scriptRoots`**
+  - A list of alternate paths to find lua scripts. This is useful for environments like LÖVE, which use custom resolvers to find scripts in other locations than what is in `package.config`.
+- **`stopOnEntry`**
+  - Automatically break on first line after debug hook is set.
+- **`cwd`**
+  - Specify working directory to launch executable in. Default is the project directory.
+- **`args`**
+  - List of arguments to pass to Lua script or custom environment when launching.
+- **`env`**
+  - Specify environment variables to set when launching executable.
+- **`verbose`**
+  - Enable verbose output from debugger. Only useful when trying to identify problems with the debugger itself.
+
+---
+## Custom Environment Examples
+
+### LÖVE
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Love",
+      "type": "lua-local",
+      "request": "launch",
+      "program": {
+        "command": "love"
+      },
+      "args": [
+        "game"
+      ],
+      "scriptRoots": [
+        "game"
+      ]
+    }
+  ]
+}
+```
+```lua
+if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
+  require("lldebugger").start()
+end
+
+function love.load()
+    ...
+```
+
+### Busted
+
+Note that even when using busted via a lua interpreter, it must be set up as a custom environment to work correctly.
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Busted CLI",
+      "type": "lua-local",
+      "request": "launch",
+      "program": {
+        "command": "busted"
+      },
+      "args": [
+        "test/start-cli.lua"
+      ]
+    },
+    {
+      "name": "Debug Busted via Lua Interpreter",
+      "type": "lua-local",
+      "request": "launch",
+      "program": {
+        "command": "lua"
+      },
+      "args": [
+        "test/start-interpreter.lua"
+      ]
+    }
+  ]
+}
+```
+
+**test/start-cli.lua**
+
+```lua
+if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
+  require("lldebugger").start()
+end
+
+describe("a test", function()
+  ...
+end)
+```
+
+**test/start-interpreter.lua**
+
+```lua
+--busted should be required before hooking debugger to avoid double-hooking
+require("busted.runner")()
+
+if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
+  require("lldebugger").start()
+end
+
+describe("a test", function()
+  ...
+end)
+```
