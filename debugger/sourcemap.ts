@@ -151,42 +151,69 @@ export namespace SourceMap
         return sourceMap;
     }
 
-    export function get(file: string): SourceMap | undefined {
-        if (file === "[C]") {
+    const scriptRootsEnv: LuaDebug.ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
+    let scriptRoots: string[] | undefined;
+
+    function getScriptRoots(): string[] {
+        if (!scriptRoots) {
+            scriptRoots = [];
+            const scriptRootsStr = os.getenv(scriptRootsEnv);
+            if (scriptRootsStr) {
+                for (let [path] of scriptRootsStr.gmatch("[^;]+")) {
+                    path = Path.format(path) + Path.separator;
+                    table.insert(scriptRoots, path);
+                }
+            }
+        }
+        return scriptRoots;
+    }
+
+    function getMap(filePath: string, file: LuaFile) {
+        let data = file.read("*a");
+        file.close();
+
+        const [encodedMap] = data.match(
+            "--# sourceMappingURL=data:application/json;base64,([A-Za-z0-9+/=]+)%s*$"
+        );
+        if (encodedMap) {
+            const map = base64Decode(encodedMap);
+            const fileDir = Path.dirName(filePath);
+            return build(map, fileDir);
+        }
+
+        const [mapFile] = io.open(filePath + ".map");
+        if (mapFile) {
+            data = mapFile.read("*a");
+            mapFile.close();
+            const fileDir = Path.dirName(filePath);
+            return build(data, fileDir);
+        }
+    }
+
+    function findMap(fileName: string) {
+        let [file] = io.open(fileName);
+        if (file) {
+            return getMap(fileName, file);
+        }
+        for (const path of getScriptRoots()) {
+            const filePath = path + fileName;
+            [file] = io.open(filePath);
+            if (file) {
+                return getMap(filePath, file);
+            }
+        }
+    }
+
+    export function get(fileName: string): SourceMap | undefined {
+        if (fileName === "[C]") {
             return undefined;
         }
 
-        let sourceMap = cache[file];
+        let sourceMap = cache[fileName];
 
         if (sourceMap === undefined) {
-            sourceMap = false;
-
-            //Look for map file
-            const mapDir = Path.dirName(file);
-            const mapFile = file + ".map";
-            let [f] = io.open(mapFile);
-            if (f) {
-                const data = f.read("*a");
-                f.close();
-                sourceMap = build(data, mapDir) || false;
-
-            //Look for inline map
-            } else {
-                [f] = io.open(file);
-                if (f) {
-                    const data = f.read("*a");
-                    f.close();
-                    const [encodedMap] = data.match(
-                        "--# sourceMappingURL=data:application/json;base64,([A-Za-z0-9+/=]+)%s*$"
-                    );
-                    if (encodedMap) {
-                        const map = base64Decode(encodedMap);
-                        sourceMap = build(map, mapDir) || false;
-                    }
-                }
-            }
-
-            cache[file] = sourceMap;
+            sourceMap = findMap(fileName) || false;
+            cache[fileName] = sourceMap;
         }
 
         return sourceMap || undefined;
