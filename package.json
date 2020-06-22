@@ -101,10 +101,6 @@
                 "configurationAttributes": {
                     "launch": {
                         "properties": {
-                            "sourceRoot": {
-                                "type": "string",
-                                "description": "Root path of source map files"
-                            },
                             "scriptRoots": {
                                 "type": "array",
                                 "items": {

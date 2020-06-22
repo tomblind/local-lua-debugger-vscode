@@ -36,7 +36,6 @@ export interface LaunchConfig {
     args?: string[];
     cwd: string;
     env?: { [name: string]: string };
-    sourceRoot?: string;
     scriptRoots?: string[];
     verbose?: boolean;
     stopOnEntry?: boolean;

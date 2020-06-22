@@ -354,12 +354,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
                 //Mapped source
                 if (frame.mappedLocation !== undefined) {
-                    const sourceRoot = this.assert(this.config).sourceRoot;
-                    const mappedPath = this.resolvePath(
-                        sourceRoot !== undefined
-                            ? path.resolve(sourceRoot, frame.mappedLocation.source)
-                            : frame.mappedLocation.source
-                    );
+                    const mappedPath = this.resolvePath(frame.mappedLocation.source);
                     if (mappedPath !== undefined) {
                         source = new Source(path.basename(mappedPath), mappedPath);
                         line = frame.mappedLocation.line;
