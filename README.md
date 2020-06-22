@@ -44,9 +44,9 @@ To debug using a custom Lua executable, you must set up your `launch.json` with 
     {
       "type": "lua-local",
       "request": "launch",
-      "name": "Debug LÖVE",
+      "name": "Debug Custom Executable",
       "program": {
-        "command": "love"
+        "command": "executable"
       },
       "args": [
         "${workspaceFolder}"
@@ -87,8 +87,6 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 
 ---
 ## Additional Configuration Options
-- **`sourceRoot`**
-  - Specify an alternate location for original source files when using source maps.
 - **`scriptRoots`**
   - A list of alternate paths to find lua scripts. This is useful for environments like LÖVE, which use custom resolvers to find scripts in other locations than what is in `package.config`.
 - **`stopOnEntry`**
