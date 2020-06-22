@@ -1,0 +1,15 @@
+{
+    "compilerOptions": {
+        "target": "esnext",
+        "lib": ["esnext"],
+        "moduleResolution": "node",
+        "types": ["lua-types/5.1", "love-typescript-definitions"],
+        "outDir": "build",
+        "rootDir": "src",
+        "baseUrl": "src",
+        "sourceMap": true
+    },
+    "tstl": {
+        "noHeader": true
+    }
+}

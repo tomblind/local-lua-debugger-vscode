@@ -1,0 +1,15 @@
+{
+  "name": "love-ts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "love-typescript-definitions": "^0.20.2",
+    "lua-types": "^2.8.0"
+  }
+}
