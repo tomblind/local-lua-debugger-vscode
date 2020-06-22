@@ -41,7 +41,7 @@
         "tslint": "^5.0.0",
         "tslint-eslint-rules": "^5.4.0",
         "typescript": "^3.7.5",
-        "typescript-to-lua": "^0.31.0",
+        "typescript-to-lua": "^0.34.0",
         "vsce": "^1.73.0"
     },
     "main": "./extension/extension.js",
