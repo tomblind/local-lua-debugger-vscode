@@ -31,9 +31,13 @@ export namespace Message {
         const messages: LuaDebug.Message[] = [];
         const strs: string[] = [];
         let strStartIndex = 0;
+        let firstOpenBrace = text.length;
         for (let openBraceIndex = 0; openBraceIndex < text.length; ++openBraceIndex) {
             const openBrace = text[openBraceIndex];
             if (openBrace === "{") {
+                if (firstOpenBrace === text.length) {
+                    firstOpenBrace = openBraceIndex;
+                }
                 let braceDepth = 0;
                 let inQuote = false;
                 for (let closeBraceIndex = openBraceIndex + 1; closeBraceIndex < text.length; ++closeBraceIndex) {
@@ -62,6 +66,7 @@ export namespace Message {
                                     strs.push(text.substring(strStartIndex, openBraceIndex));
                                     strStartIndex = closeBraceIndex + 1;
                                     openBraceIndex = closeBraceIndex;
+                                    firstOpenBrace = text.length;
                                 }
                                 break;
                             }
@@ -70,6 +75,13 @@ export namespace Message {
                 }
             }
         }
+
+        //Push out anything before first brace
+        if (firstOpenBrace > strStartIndex) {
+            strs.push(text.substring(strStartIndex, firstOpenBrace));
+            strStartIndex = firstOpenBrace;
+        }
+
         return [messages, strs.join(""), text.substr(strStartIndex)];
     }
 }
