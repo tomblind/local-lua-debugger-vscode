@@ -32,6 +32,7 @@ export interface SourceLineMapping {
 export interface SourceMap {
     [line: number]: SourceLineMapping | undefined;
     sources: string[];
+    names: Record<string, string>;
 }
 
 export namespace SourceMap
@@ -104,16 +105,16 @@ export namespace SourceMap
         return values;
     }
 
-    function build(data: string, mapDir: string) {
+    function build(data: string, mapDir: string, luaScript: string) {
         const [sources] = data.match('"sources"%s*:%s*(%b[])');
         const [mappings] = data.match('"mappings"%s*:%s*"([^"]+)"');
-        let [sourceRoot] = data.match('"sourceRoot"%s*:%s*"([^"]+)"');
         if (!mappings || !sources) {
             return undefined;
         }
 
-        const sourceMap: SourceMap = {sources: []};
+        const sourceMap: SourceMap = {sources: [], names: {}};
 
+        let [sourceRoot] = data.match('"sourceRoot"%s*:%s*"([^"]+)"');
         if (sourceRoot === undefined || sourceRoot.length === 0) {
             sourceRoot = ".";
         }
@@ -123,16 +124,51 @@ export namespace SourceMap
             table.insert(sourceMap.sources, Path.getAbsolute(sourcePath));
         }
 
+        const [names] = data.match('"names"%s*:%s*(%b[])');
+        let nameList: string[] | undefined;
+        if (names) {
+            nameList = [];
+            for (const [name] of names.gmatch('"([^"]+)"')) {
+                table.insert(nameList, name);
+            }
+        }
+
+        let luaLines: string[] | undefined;
+
         let line = 1;
         let sourceIndex = 0;
         let sourceLine = 1;
         let sourceColumn = 1;
+        let nameIndex = 0;
         for (const [mapping, separator] of mappings.gmatch("([^;,]*)([;,]?)")) {
             if (mapping.length > 0) {
-                const [colOffset, sourceOffset, sourceLineOffset, sourceColOffset] = decodeBase64VLQ(mapping);
+                const [column, sourceOffset, sourceLineOffset, sourceColOffset, nameOffset] = decodeBase64VLQ(mapping);
+
                 sourceIndex += (sourceOffset || 0);
                 sourceLine += (sourceLineOffset || 0);
                 sourceColumn += (sourceColOffset || 0);
+
+                if (nameList && nameOffset) {
+                    nameIndex += nameOffset;
+
+                    const sourceName = nameList[nameIndex];
+
+                    if (!luaLines) {
+                        luaLines = [];
+                        for (const [luaLineStr] of luaScript.gmatch("([^\r\n]*)\r?\n")) {
+                            table.insert(luaLines, luaLineStr);
+                        }
+                    }
+
+                    const luaLine = luaLines[line - 1];
+                    if (luaLine) {
+                        const [luaName] = luaLine.sub(column).match("[a-zA-Z_][A-Za-z0-9_]*");
+                        if (luaName) {
+                            sourceMap.names[sourceName] = luaName;
+                            // print(luaName + " = " + sourceName, line, column, luaLine);
+                        }
+                    }
+                }
 
                 const lineMapping = sourceMap[line];
                 if (!lineMapping
@@ -169,7 +205,7 @@ export namespace SourceMap
     }
 
     function getMap(filePath: string, file: LuaFile) {
-        let data = file.read("*a");
+        const data = file.read("*a");
         file.close();
 
         const [encodedMap] = data.match(
@@ -178,15 +214,15 @@ export namespace SourceMap
         if (encodedMap) {
             const map = base64Decode(encodedMap);
             const fileDir = Path.dirName(filePath);
-            return build(map, fileDir);
+            return build(map, fileDir, data);
         }
 
         const [mapFile] = io.open(filePath + ".map");
         if (mapFile) {
-            data = mapFile.read("*a");
+            const map = mapFile.read("*a");
             mapFile.close();
             const fileDir = Path.dirName(filePath);
-            return build(data, fileDir);
+            return build(map, fileDir, data);
         }
     }
 
