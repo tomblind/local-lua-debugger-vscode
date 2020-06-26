@@ -32,7 +32,9 @@ export interface SourceLineMapping {
 export interface SourceMap {
     [line: number]: SourceLineMapping | undefined;
     sources: string[];
-    names: Record<string, string>;
+    sourceNames: Record<string, string>;
+    luaNames: Record<string, string>;
+    hasMappedNames: boolean;
 }
 
 export namespace SourceMap
@@ -112,7 +114,7 @@ export namespace SourceMap
             return undefined;
         }
 
-        const sourceMap: SourceMap = {sources: [], names: {}};
+        const sourceMap: SourceMap = {sources: [], sourceNames: {}, luaNames: {}, hasMappedNames: false};
 
         let [sourceRoot] = data.match('"sourceRoot"%s*:%s*"([^"]+)"');
         if (sourceRoot === undefined || sourceRoot.length === 0) {
@@ -136,14 +138,17 @@ export namespace SourceMap
         let luaLines: string[] | undefined;
 
         let line = 1;
+        let column = 1;
         let sourceIndex = 0;
         let sourceLine = 1;
         let sourceColumn = 1;
         let nameIndex = 0;
         for (const [mapping, separator] of mappings.gmatch("([^;,]*)([;,]?)")) {
             if (mapping.length > 0) {
-                const [column, sourceOffset, sourceLineOffset, sourceColOffset, nameOffset] = decodeBase64VLQ(mapping);
+                const [colOffset, sourceOffset, sourceLineOffset, sourceColOffset, nameOffset]
+                    = decodeBase64VLQ(mapping);
 
+                column += (colOffset || 0);
                 sourceIndex += (sourceOffset || 0);
                 sourceLine += (sourceLineOffset || 0);
                 sourceColumn += (sourceColOffset || 0);
@@ -164,8 +169,9 @@ export namespace SourceMap
                     if (luaLine) {
                         const [luaName] = luaLine.sub(column).match("[a-zA-Z_][A-Za-z0-9_]*");
                         if (luaName) {
-                            sourceMap.names[sourceName] = luaName;
-                            // print(luaName + " = " + sourceName, line, column, luaLine);
+                            sourceMap.sourceNames[luaName] = sourceName;
+                            sourceMap.luaNames[sourceName] = luaName;
+                            sourceMap.hasMappedNames = true;
                         }
                     }
                 }
@@ -181,6 +187,7 @@ export namespace SourceMap
 
             if (separator === ";") {
                 ++line;
+                column = 1;
             }
         }
 

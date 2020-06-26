@@ -212,6 +212,74 @@ export namespace Debugger {
         return globs;
     }
 
+    function mapVarNames(vars: Vars, sourceMap: SourceMap | undefined) {
+        if (!sourceMap) {
+            return;
+        }
+
+        const addVars: Vars = {};
+        const removeVars: string[] = [];
+        for (const [name, info] of pairs(vars)) {
+            const mappedName = sourceMap.sourceNames[name];
+            if (mappedName) {
+                addVars[mappedName] = info;
+                table.insert(removeVars, name);
+            }
+        }
+        for (const [_, name] of ipairs(removeVars)) {
+            delete vars[name];
+        }
+        for (const [name, info] of pairs(addVars)) {
+            vars[name] = info;
+        }
+    }
+
+    function mapExpressionNames(expression: string, sourceMap: SourceMap | undefined) {
+        if (!sourceMap || !sourceMap.hasMappedNames) {
+            return expression;
+        }
+
+        const literals: string[] = [];
+
+        function storeLiteral(tag: string) {
+            return (quoted: string) => {
+                table.insert(literals, quoted);
+                return tag;
+            };
+        }
+
+        function restoreLiteral() {
+            return luaAssert(table.remove(literals, 1));
+        }
+
+        //Pull out string literals
+        let [mappedExpression] = expression.gsub('"[^"]+"', storeLiteral('"@"'));
+        [mappedExpression] = mappedExpression.gsub("'[^']+'", storeLiteral("'#'"));
+        [mappedExpression] = mappedExpression.gsub("%[%[[^%]]+%]%]", storeLiteral("[[!]]"));
+
+        //Substitute mapped names
+        [mappedExpression] = mappedExpression.gsub(
+            "[%.]?[^\"'`~!@#%%^&*%(%)%-+=%[%]{}|\\/<>,%.:;%s]+",
+            (sourceName) => {
+                if (sourceName.sub(1, 1) === ".") {
+                    const propertyName = sourceName.sub(2);
+                    const [illegalCharacter] = propertyName.match("[^A-Za-z0-9_]");
+                    if (illegalCharacter) {
+                        return `[ [[${propertyName}]] ]`; //Quote properties with illegal characters
+                    }
+                }
+                return sourceMap.luaNames[sourceName] || sourceName;
+            }
+        );
+
+        //Restore string literals
+        [mappedExpression] = mappedExpression.gsub('"@"', restoreLiteral);
+        [mappedExpression] = mappedExpression.gsub("'#'", restoreLiteral);
+        [mappedExpression] = mappedExpression.gsub("%[%[!%]%]", restoreLiteral);
+
+        return mappedExpression;
+    }
+
     /** @tupleReturn */
     function execute(
         statement: string,
@@ -323,6 +391,8 @@ export namespace Debugger {
         let currentThread = activeThread;
         let currentStack = activeStack;
         let info = luaAssert(currentStack[frame]);
+        let source = Path.format(luaAssert(info.source));
+        let sourceMap = SourceMap.get(source);
         while (true) {
             const inp = getInput();
             if (!inp || inp === "quit") {
@@ -399,6 +469,8 @@ export namespace Debugger {
                             && activeThreadFrameOffset
                             || inactiveThreadFrameOffset;
                         info = luaAssert(currentStack[frame]);
+                        source = Path.format(luaAssert(info.source));
+                        sourceMap = SourceMap.get(source);
                         backtrace(currentStack, frame);
                     } else {
                         Send.error("Bad thread id");
@@ -432,6 +504,8 @@ export namespace Debugger {
                     if (newFrame !== undefined && newFrame > 0 && newFrame <= currentStack.length) {
                         frame = newFrame - 1;
                         info = luaAssert(currentStack[frame]);
+                        source = Path.format(luaAssert(info.source));
+                        sourceMap = SourceMap.get(source);
                         backtrace(currentStack, frame);
                     } else {
                         Send.error("Bad frame");
@@ -442,14 +516,17 @@ export namespace Debugger {
 
             } else if (inp === "locals") {
                 const locs = getLocals(frame + frameOffset + 1, currentThread);
+                mapVarNames(locs, sourceMap);
                 Send.vars(locs);
 
             } else if (inp === "ups") {
                 const ups = getUpvalues(info);
+                mapVarNames(ups, sourceMap);
                 Send.vars(ups);
 
             } else if (inp === "globals") {
                 const globs = getGlobals(frame + frameOffset + 1, currentThread);
+                mapVarNames(globs, sourceMap);
                 Send.vars(globs);
 
             } else if (inp.sub(1, 5) === "break") {
@@ -523,7 +600,8 @@ export namespace Debugger {
                     Send.error("Bad expression");
 
                 } else {
-                    const [s, r] = execute("return " + expression, currentThread, frame, frameOffset, info);
+                    const mappedExpression = mapExpressionNames(expression, sourceMap);
+                    const [s, r] = execute("return " + mappedExpression, currentThread, frame, frameOffset, info);
                     if (s) {
                         Send.result(r);
                     } else {
@@ -540,12 +618,13 @@ export namespace Debugger {
                     Send.error("Bad kind: " + `'${kind}'`);
 
                 } else {
-                    const [s, r] = execute("return " + expression, currentThread, frame, frameOffset, info);
+                    const mappedExpression = mapExpressionNames(expression, sourceMap);
+                    const [s, r] = execute("return " + mappedExpression, currentThread, frame, frameOffset, info);
                     if (s) {
                         if (typeof r === "object") {
                             Send.props(r as object, kind, tonumber(first), tonumber(count));
                         } else {
-                            Send.error(`Expression "${expression}" is not a table`);
+                            Send.error(`Expression "${mappedExpression}" is not a table`);
                         }
                     } else {
                         Send.error(r as string);
@@ -647,7 +726,8 @@ export namespace Debugger {
         for (const breakpoint of breakpoints) {
             if (breakpoint.enabled && checkBreakpoint(breakpoint, source, topFrame.currentline, sourceMap)) {
                 if (breakpoint.condition) {
-                    const condition = "return " + breakpoint.condition;
+                    const mappedCondition = mapExpressionNames(breakpoint.condition, sourceMap);
+                    const condition = "return " + mappedCondition;
                     const [success, result] = execute(condition, activeThread, 0, stackOffset, topFrame);
                     if (success && result) {
                         const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
