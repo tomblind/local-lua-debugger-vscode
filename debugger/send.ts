@@ -101,19 +101,6 @@ export namespace Send {
         send(dbgThreads);
     }
 
-    export function locals(locs: Locals) {
-        const dbgVariables: LuaDebug.Variables = {
-            tag: "$luaDebug",
-            type: "variables",
-            variables: Format.makeExplicitArray()
-        };
-        for (const [name, info] of pairs(locs)) {
-            const dbgVar = buildVariable(name, info.val);
-            table.insert(dbgVariables.variables, dbgVar);
-        }
-        send(dbgVariables);
-    }
-
     export function vars(varsObj: Vars) {
         const dbgVariables: LuaDebug.Variables = {
             tag: "$luaDebug",
