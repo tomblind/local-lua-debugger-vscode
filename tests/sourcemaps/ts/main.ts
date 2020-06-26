@@ -12,10 +12,10 @@ function printFoobar(this: any) {
     const foobar = Sub.foobar();
     console.log(foobar);
     console.log(name$test);
-    const $_$ = "FOO";
-    console.log(name$test.$foo.bar$.b_$_z($_$, 'BAR').__$$);
-    console.log(name$test["$foo"]["bar$"]["b_$_z"]($_$, 'BAR')["__$$"]);
-    console.log(name$test["$foo"].bar$["b_$_z"]($_$, 'BAR').__$$);
+    const ڂ = "FOO";
+    console.log(name$test.$foo.bar$.b_$_z(ڂ, 'BAR').__$$);
+    console.log(name$test["$foo"]["bar$"]["b_$_z"](ڂ, 'BAR')["__$$"]);
+    console.log(name$test["$foo"].bar$["b_$_z"](ڂ, 'BAR').__$$);
 }
 
 printFoobar();

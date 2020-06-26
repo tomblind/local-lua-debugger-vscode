@@ -239,43 +239,60 @@ export namespace Debugger {
             return expression;
         }
 
-        const literals: string[] = [];
-
-        function storeLiteral(tag: string) {
-            return (quoted: string) => {
-                table.insert(literals, quoted);
-                return tag;
-            };
-        }
-
-        function restoreLiteral() {
-            return luaAssert(table.remove(literals, 1));
-        }
-
-        //Pull out string literals
-        let [mappedExpression] = expression.gsub('"[^"]+"', storeLiteral('"@"'));
-        [mappedExpression] = mappedExpression.gsub("'[^']+'", storeLiteral("'#'"));
-        [mappedExpression] = mappedExpression.gsub("%[%[[^%]]+%]%]", storeLiteral("[[!]]"));
-
-        //Substitute mapped names
-        [mappedExpression] = mappedExpression.gsub(
-            "[%.]?[^\"'`~!@#%%^&*%(%)%-+=%[%]{}|\\/<>,%.:;%s]+",
-            (sourceName) => {
-                if (sourceName.sub(1, 1) === ".") {
-                    const propertyName = sourceName.sub(2);
-                    const [illegalCharacter] = propertyName.match("[^A-Za-z0-9_]");
-                    if (illegalCharacter) {
-                        return `[ [[${propertyName}]] ]`; //Quote properties with illegal characters
-                    }
+        function mapName(sourceName: string, isProperty: boolean) {
+            if (isProperty) {
+                const [illegalChar] = sourceName.match("[^A-Za-z0-9_]");
+                if (illegalChar) {
+                    return `[ [[${sourceName}]] ]`;
+                } else {
+                    return `.${sourceName}`;
                 }
-                return sourceMap.luaNames[sourceName] || sourceName;
+            } else {
+                return luaAssert(sourceMap).luaNames[sourceName] || sourceName;
             }
-        );
+        }
 
-        //Restore string literals
-        [mappedExpression] = mappedExpression.gsub('"@"', restoreLiteral);
-        [mappedExpression] = mappedExpression.gsub("'#'", restoreLiteral);
-        [mappedExpression] = mappedExpression.gsub("%[%[!%]%]", restoreLiteral);
+        let lastChar = "";
+        let inQuote: string | undefined;
+        let nameStart: number | undefined;
+        let nameIsProperty = false;
+        let nonNameStart = 1;
+        let mappedExpression = "";
+        for (const i of forRange(1, expression.length)) {
+            const char = expression.sub(i, i);
+            if (inQuote) {
+                if (inQuote === "[") {
+                    if (char === "]" && lastChar === "]") {
+                        inQuote = undefined;
+                    }
+                } else if (char === inQuote && lastChar !== "\\") {
+                    inQuote = undefined;
+                }
+            } else if (char === '"' || char === "'" || (char === "[" && lastChar === "[")) {
+                inQuote = char;
+            } else {
+                const [nameChar] = char.match("[^\"'`~!@#%%^&*%(%)%-+=%[%]{}|\\/<>,%.:;%s]");
+                if (nameStart) {
+                    if (!nameChar) {
+                        const sourceName = expression.sub(nameStart, i - 1);
+                        mappedExpression += mapName(sourceName, nameIsProperty);
+                        nameStart = undefined;
+                        nonNameStart = i;
+                    }
+                } else if (nameChar) {
+                    nameIsProperty = (lastChar === ".");
+                    nameStart = i;
+                    mappedExpression += expression.sub(nonNameStart, nameStart - (nameIsProperty ? 2 : 1));
+                }
+            }
+            lastChar = char;
+        }
+        if (nameStart) {
+            const sourceName = expression.sub(nameStart);
+            mappedExpression += mapName(sourceName, nameIsProperty);
+        } else {
+            mappedExpression += expression.sub(nonNameStart);
+        }
 
         return mappedExpression;
     }
