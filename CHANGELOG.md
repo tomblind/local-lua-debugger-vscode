@@ -1,3 +1,12 @@
+## Version 0.2.0
+- Experimental support for mapping variable names from source maps
+- Passing executable and script through 'arg' to fully simulate standard environment
+- Using function environments instead of '_G' when evaluating expressions
+- Added 'scriptRoots' option for enviornments with custom loaders
+- Removed 'sourceRoot' option
+- Addressed output being delayed under some circumstances
+- Other small bug fixes
+
 ## Version 0.1.10
 - Fixed breakpoints set on first line of code
 - Fixed handling of null bytes in strings
