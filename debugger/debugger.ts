@@ -243,7 +243,7 @@ export namespace Debugger {
             if (isProperty) {
                 const [illegalChar] = sourceName.match("[^A-Za-z0-9_]");
                 if (illegalChar) {
-                    return `[ [[${sourceName}]] ]`;
+                    return `["${sourceName}"]`;
                 } else {
                     return `.${sourceName}`;
                 }
@@ -252,8 +252,8 @@ export namespace Debugger {
             }
         }
 
-        let lastChar = "";
         let inQuote: string | undefined;
+        let isEscaped = false;
         let nameStart: number | undefined;
         let nameIsProperty = false;
         let nonNameStart = 1;
@@ -261,14 +261,14 @@ export namespace Debugger {
         for (const i of forRange(1, expression.length)) {
             const char = expression.sub(i, i);
             if (inQuote) {
-                if (inQuote === "[") {
-                    if (char === "]" && lastChar === "]") {
-                        inQuote = undefined;
-                    }
-                } else if (char === inQuote && lastChar !== "\\") {
+                if (char === "\\") {
+                    isEscaped = !isEscaped;
+                } else if (char === inQuote && !isEscaped) {
                     inQuote = undefined;
+                } else {
+                    isEscaped = false;
                 }
-            } else if (char === '"' || char === "'" || (char === "[" && lastChar === "[")) {
+            } else if (char === '"' || char === "'") {
                 inQuote = char;
             } else {
                 const [nameChar] = char.match("[^\"'`~!@#%%^&*%(%)%-+=%[%]{}|\\/<>,%.:;%s]");
@@ -280,12 +280,12 @@ export namespace Debugger {
                         nonNameStart = i;
                     }
                 } else if (nameChar) {
+                    const lastChar = expression.sub(i - 1, i - 1);
                     nameIsProperty = (lastChar === ".");
                     nameStart = i;
-                    mappedExpression += expression.sub(nonNameStart, nameStart - (nameIsProperty ? 2 : 1));
+                    mappedExpression += expression.sub(nonNameStart, nameStart - (nameIsProperty && 2 || 1));
                 }
             }
-            lastChar = char;
         }
         if (nameStart) {
             const sourceName = expression.sub(nameStart);
