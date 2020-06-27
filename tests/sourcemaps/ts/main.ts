@@ -12,7 +12,8 @@ const name$test = {
     }
 };
 
-function printFoobar(this: any) {
+function printFoobar() {
+    console.log(this._VERSION);
     const foobar = Sub.foobar();
     console.log(foobar);
     const self = 42;
