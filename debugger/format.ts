@@ -20,7 +20,7 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
-import {luaRawLen} from "./luafuncs";
+import {luaRawLen, luaAssert} from "./luafuncs";
 
 export namespace Format {
     export const arrayTag = {} as "$arrayTag";
@@ -44,13 +44,20 @@ export namespace Format {
         ["\b"]: "\\b",
         ["\f"]: "\\f",
         ["\t"]: "\\t",
-        ["\0"]: "\\u0000"
     };
 
-    const escapesPattern = "[\n\r\"\\\b\f\t%z]";
+    const escapesPattern = "[\n\r\"\\\b\f\t%z\x01-\x1F]";
+
+    function replaceEscape(char: string) {
+        const [byte] = string.byte(char);
+        if (byte >= 0 && byte < 32) { //Control characters
+            return string.format("\\u%.4X", byte);
+        }
+        return luaAssert(escapes[char]);
+    }
 
     function escape(str: string) {
-        const [escaped] = str.gsub(escapesPattern, escapes);
+        const [escaped] = str.gsub(escapesPattern, replaceEscape);
         return escaped;
     }
 
