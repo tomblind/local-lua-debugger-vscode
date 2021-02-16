@@ -1,3 +1,7 @@
+## Version 0.2.1
+- Fixed handling of control characters
+- Fixed issue with handling recursive metatables
+
 ## Version 0.2.0
 - Experimental support for mapping variable names from source maps
 - Passing executable and script through 'arg' to fully simulate standard environment
