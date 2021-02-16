@@ -48,7 +48,7 @@ export const luaCoroutineCreate = coroutine.create;
 
 export const luaRawLen = rawlen || function<T extends object>(v: T | string): number {
     const mt = getmetatable(v);
-    if (!mt || !(mt as {__len?: unknown}).__len) {
+    if (!mt || !rawget(mt as {__len?: unknown}, "__len")) {
         return (v as unknown[]).length;
     } else {
         let len = 1;
