@@ -38,11 +38,13 @@
     "devDependencies": {
         "@types/node": "^13.7.1",
         "@types/vscode": "^1.44.0",
-        "tslint": "^5.0.0",
-        "tslint-eslint-rules": "^5.4.0",
-        "typescript": "^3.7.5",
-        "typescript-to-lua": "^0.34.0",
-        "vsce": "^1.73.0"
+        "@typescript-eslint/eslint-plugin": "^3.10.1",
+        "@typescript-eslint/parser": "^3.10.1",
+        "eslint": "^7.7.0",
+        "lua-types": "^2.10.1",
+        "typescript": "^4.3.5",
+        "typescript-to-lua": "^0.41.0",
+        "vsce": "^1.96.1"
     },
     "main": "./extension/extension.js",
     "engines": {

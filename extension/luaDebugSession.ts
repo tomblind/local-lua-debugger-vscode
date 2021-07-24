@@ -853,6 +853,6 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     private waitForConfiguration() {
-        return new Promise(resolve => this.onConfigurationDone = resolve);
+        return new Promise<void>(resolve => this.onConfigurationDone = () => resolve());
     }
 }
