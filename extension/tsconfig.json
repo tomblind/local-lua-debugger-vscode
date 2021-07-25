@@ -6,6 +6,7 @@
         "sourceMap": true
     },
     "include": [
+        "../debugger/protocol.d.ts",
         "./**/*.ts"
     ]
 }

@@ -42,5 +42,5 @@ export interface LaunchConfig {
 }
 
 export function isCustomProgramConfig(config: LuaProgramConfig | CustomProgramConfig): config is CustomProgramConfig {
-    return (config as CustomProgramConfig).command !== undefined;
+    return typeof (config as CustomProgramConfig).command !== "undefined";
 }
