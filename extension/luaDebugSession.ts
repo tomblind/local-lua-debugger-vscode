@@ -125,6 +125,11 @@ function makeFrameId(threadId: number, frame: number) {
     return (threadId - 1) * maxStackCount + (frame - 1);
 }
 
+function escape_backslash(src: string) {
+    const dst = src.replace(/\\/g, "\\\\");
+    return dst;
+}
+
 export class LuaDebugSession extends LoggingDebugSession {
     private readonly fileBreakpoints: { [file: string]: DebugProtocol.SourceBreakpoint[] | undefined } = {};
     private config?: LaunchConfig;
@@ -228,7 +233,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         } else {
             processExecutable = `"${this.config.program.lua}"`;
-            const programArgs = (this.config.args !== undefined) ? `, ${this.config.args.map(a => `\\"${a}\\"`)}` : "";
+            const programArgs = (this.config.args !== undefined) ? `, ${this.config.args.map(a => `\\"${escape_backslash(a)}\\"`)}` : "";
             processArgs = [
                 "-e",
                 `"require('lldebugger').runFile(`
