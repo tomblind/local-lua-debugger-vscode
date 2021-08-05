@@ -35,7 +35,8 @@ export namespace Send {
             return tostring(value);
 
         } else {
-            return `[${value}]`;
+            const [_, str] = pcall(tostring, value);
+            return `[${str}]`;
         }
     }
 
