@@ -228,7 +228,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         } else {
             processExecutable = `"${this.config.program.lua}"`;
-            const programArgs = (this.config.args !== undefined) ? `, ${this.config.args.map(a => `\\"${a}\\"`)}` : "";
+            const programArgs = (this.config.args !== undefined) ? `, ${this.config.args.map(a => `[[${a}]]`)}` : "";
             processArgs = [
                 "-e",
                 `"require('lldebugger').runFile(`
