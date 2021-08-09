@@ -1,3 +1,9 @@
+## Version 0.2.2
+- Fixed bug when tostring metamethod has errors
+- Fixed handling of backslashes in args (thanks to ousttrue)
+- Fixed some issues with propagation of errors
+- Calls to `error` and `assert` will now break inside of coroutines
+
 ## Version 0.2.1
 - Fixed handling of control characters
 - Fixed issue with handling recursive metatables
