@@ -42,7 +42,7 @@
         "tslint-eslint-rules": "^5.4.0",
         "typescript": "^3.7.5",
         "typescript-to-lua": "^0.34.0",
-        "vsce": "^1.73.0"
+        "vsce": "^1.96.1"
     },
     "main": "./extension/extension.js",
     "engines": {
