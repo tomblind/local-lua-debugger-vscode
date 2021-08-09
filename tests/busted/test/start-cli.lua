@@ -9,6 +9,10 @@ describe("a test", function()
     print("FUBAR")
 end)
 
+describe("an explicit error", function()
+    error("FUBAR")
+end)
+
 describe("an error", function()
     x = y / z
 end)

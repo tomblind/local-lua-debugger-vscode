@@ -62,7 +62,7 @@ export namespace Debugger {
     const debuggerName = "lldebugger.lua";
     const builtinFunctionPrefix = "[builtin:";
 
-    let skipBreakInNextTraceback = false;
+    let skipNextBreak = false;
 
     const enum HookType {
         Global = "global",
@@ -790,6 +790,22 @@ export namespace Debugger {
         return str;
     }
 
+    function breakForError(err: unknown, level: number) {
+        const message = mapSources(tostring(err));
+
+        if (skipNextBreak) {
+            skipNextBreak = false;
+
+        } else {
+            const thread = coroutine.running() || mainThread;
+            Send.debugBreak(message, "error", getThreadId(thread));
+            debugBreak(thread, level + 1);
+        }
+
+        skipNextBreak = true;
+        return luaError(message, level + 1);
+    }
+
     //coroutine.create replacement for hooking threads
     function registerThread(thread: LuaThread) {
         assert(!threadIds.get(thread));
@@ -819,7 +835,7 @@ export namespace Debugger {
         const resumer = (...args: LuaVarArg<unknown[]>) => {
             const results = coroutine.resume(thread, ...args);
             if (!results[0]) {
-                luaError(results[1]);
+                return breakForError(tostring(results[1]), 1);
             }
             return unpack(results, 2);
         };
@@ -842,8 +858,8 @@ export namespace Debugger {
             trace = mapSources(trace);
         }
 
-        if (skipBreakInNextTraceback) {
-            skipBreakInNextTraceback = false;
+        if (skipNextBreak) {
+            skipNextBreak = false;
 
         //Break if debugging globally and traceback was not called manually from scripts
         } else if (
@@ -860,39 +876,27 @@ export namespace Debugger {
 
     //error replacement for catching errors
     function debuggerError(message: string, level?: number) {
-        message = mapSources(message);
-        const thread = coroutine.running() || mainThread;
-        Send.debugBreak(message, "error", getThreadId(thread));
-        debugBreak(thread, 2);
-        skipBreakInNextTraceback = true;
-        return luaError(message, level);
+        return breakForError(message, (level || 0) + 1);
     }
 
     /** @tupleReturn */
     function debuggerAssert(v: unknown, ...args: LuaVarArg<unknown[]>) {
         if (!v) {
-            const message = args[0] !== undefined && mapSources(tostring(args[0])) || "assertion failed";
-            const thread = coroutine.running() || mainThread;
-            Send.debugBreak(message, "error", getThreadId(thread));
-            debugBreak(thread, 2);
-            skipBreakInNextTraceback = true;
-            return luaError(message);
+            const message = args[0] !== undefined && args[0] || "assertion failed";
+            return breakForError(message, 1);
         }
         return [v, ...args];
     }
 
     function setErrorHandler() {
         const hookType = hookStack[hookStack.length - 1];
-        if (hookType === HookType.Global) {
+        if (hookType !== undefined) {
             _G.error = debuggerError;
             _G.assert = debuggerAssert;
+            debug.traceback = debuggerTraceback;
         } else {
             _G.error = luaError;
             _G.assert = luaAssert;
-        }
-        if (hookType !== undefined) {
-            debug.traceback = debuggerTraceback;
-        } else {
             debug.traceback = luaDebugTraceback;
         }
     }
@@ -964,6 +968,10 @@ export namespace Debugger {
     }
 
     function onError(err: unknown) {
+        if (skipNextBreak) {
+            skipNextBreak = false;
+            return;
+        }
         const msg = mapSources(tostring(err));
         const thread = coroutine.running() || mainThread;
         Send.debugBreak(msg, "error", getThreadId(thread));
@@ -978,10 +986,14 @@ export namespace Debugger {
             Debugger.triggerBreak();
         }
 
-        const [success, results] = xpcall(() => func(...args), onError);
+        const results = xpcall(() => func(...args), onError);
         Debugger.popHook();
-        if (success) {
-            return results;
+        if (results[0]) {
+            return unpack(results, 2);
+        } else {
+            skipNextBreak = true;
+            const message = mapSources(tostring(results[1]));
+            luaError(message, 2);
         }
     }
 }

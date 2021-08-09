@@ -9,19 +9,39 @@ local function addButton(text, x, y, w, h, cb)
     table.insert(buttons, {text = text, x = x, y = y, w = w, h = h, cb = cb})
 end
 
-local function error1()
+local function errorImplicit()
     require("lldebugger").call(function()
         x = y / z
     end)
 end
 
-local function error2()
+local function errorExplicit()
     error("FUBAR")
 end
 
+local function errorCoroutineImplicit()
+    local function d()
+        local x = nil + nil
+    end
+
+    local wrapped = coroutine.wrap(d)
+    wrapped()
+end
+
+local function errorCoroutineExplicit()
+    local function d()
+        error("FUBAR")
+    end
+
+    local wrapped = coroutine.wrap(d)
+    wrapped()
+end
+
 function love.load()
-    addButton("Error 1", 10, 10, 100, 50, error1)
-    addButton("Error 2", 10, 70, 100, 50, error2)
+    addButton("Error Implicit", 10, 10, 200, 50, errorImplicit)
+    addButton("Error Explicit", 10, 70, 200, 50, errorExplicit)
+    addButton("Error Co Implicit", 10, 130, 200, 50, errorCoroutineImplicit)
+    addButton("Error Co Explicit", 10, 190, 200, 50, errorCoroutineExplicit)
 end
 
 function love.draw()

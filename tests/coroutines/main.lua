@@ -1,3 +1,6 @@
+local testExplicitError = false
+local testImplicitError = false
+
 function a(id)
     for i = 1, 10 do
         coroutine.yield(id .. i)
@@ -43,3 +46,21 @@ function c()
 end
 
 c()
+
+if testExplicitError then
+    local function d()
+        error("Error")
+    end
+
+    local wrapped = coroutine.wrap(d)
+    wrapped()
+end
+
+if testImplicitError then
+    local function d()
+        local x = nil + nil
+    end
+
+    local wrapped = coroutine.wrap(d)
+    wrapped()
+end
