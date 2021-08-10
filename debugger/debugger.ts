@@ -25,6 +25,7 @@ import {
     luaError,
     luaCoroutineCreate,
     luaCoroutineWrap,
+    luaCoroutineResume,
     luaDebugTraceback,
     loadLuaString,
     luaGetEnv
@@ -790,8 +791,11 @@ export namespace Debugger {
         return str;
     }
 
-    function breakForError(err: unknown, level: number) {
+    function breakForError(err: unknown, level: number, propagate: true): never;
+    function breakForError(err: unknown, level?: number, propagate?: false): void;
+    function breakForError(err: unknown, level?: number, propagate?: boolean) {
         const message = mapSources(tostring(err));
+        level = (level || 1) + 1;
 
         if (skipNextBreak) {
             skipNextBreak = false;
@@ -799,11 +803,13 @@ export namespace Debugger {
         } else {
             const thread = coroutine.running() || mainThread;
             Send.debugBreak(message, "error", getThreadId(thread));
-            debugBreak(thread, level + 1);
+            debugBreak(thread, level);
         }
 
-        skipNextBreak = true;
-        return luaError(message, level + 1);
+        if (propagate) {
+            skipNextBreak = true;
+            return luaError(message, level);
+        }
     }
 
     //coroutine.create replacement for hooking threads
@@ -822,23 +828,61 @@ export namespace Debugger {
         return threadId;
     }
 
+    let canYieldAcrossPcall: boolean | undefined;
+
+    function useXpcallInCoroutine() {
+        if (canYieldAcrossPcall === undefined) {
+            const [_, yieldResult] = luaCoroutineResume(luaCoroutineCreate(() => pcall(() => coroutine.yield(true))));
+            canYieldAcrossPcall = (yieldResult === true);
+        }
+        return canYieldAcrossPcall;
+    }
+
     function debuggerCoroutineCreate(f: Function) {
+        if (useXpcallInCoroutine()) {
+            const originalFunc = f as DebuggableFunction;
+            /** @tupleReturn **/
+            function debugFunc(...args: unknown[]) {
+                /** @tupleReturn **/
+                function wrappedFunc() {
+                    return originalFunc(...args);
+                }
+                const results = xpcall(wrappedFunc, breakForError);
+                if (results[0]) {
+                    return unpack(results, 2);
+                } else {
+                    skipNextBreak = true;
+                    const message = mapSources(tostring(results[1]));
+                    luaError(message, 2);
+                }
+            }
+            f = debugFunc;
+        }
         const thread = luaCoroutineCreate(f);
         registerThread(thread);
         return thread;
+    }
+
+    /** @tupleReturn */
+    function debuggerCoroutineResume(thread: LuaThread, ...args: unknown[]): [true, ...unknown[]] | [false, string] {
+        const results = luaCoroutineResume(thread, ...args);
+        if (!results[0]) {
+            breakForError(results[1], 2);
+        }
+        return results;
     }
 
     //coroutine.wrap replacement for hooking threads
     function debuggerCoroutineWrap(f: Function) {
         const thread = debuggerCoroutineCreate(f);
         /** @tupleReturn */
-        const resumer = (...args: LuaVarArg<unknown[]>) => {
-            const results = coroutine.resume(thread, ...args);
+        function resumer(...args: LuaVarArg<unknown[]>) {
+            const results = luaCoroutineResume(thread, ...args);
             if (!results[0]) {
-                return breakForError(tostring(results[1]), 1);
+                return breakForError(results[1], 1, true);
             }
             return unpack(results, 2);
-        };
+        }
         return resumer;
     }
 
@@ -876,14 +920,14 @@ export namespace Debugger {
 
     //error replacement for catching errors
     function debuggerError(message: string, level?: number) {
-        return breakForError(message, (level || 0) + 1);
+        return breakForError(message, (level || 0) + 1, true);
     }
 
     /** @tupleReturn */
     function debuggerAssert(v: unknown, ...args: LuaVarArg<unknown[]>) {
         if (!v) {
             const message = args[0] !== undefined && args[0] || "assertion failed";
-            return breakForError(message, 1);
+            return breakForError(message, 1, true);
         }
         return [v, ...args];
     }
@@ -910,6 +954,7 @@ export namespace Debugger {
 
         coroutine.create = luaCoroutineCreate;
         coroutine.wrap = luaCoroutineWrap;
+        coroutine.resume = luaCoroutineResume;
 
         debug.sethook();
 
@@ -931,6 +976,7 @@ export namespace Debugger {
 
         coroutine.create = debuggerCoroutineCreate;
         coroutine.wrap = debuggerCoroutineWrap;
+        coroutine.resume = debuggerCoroutineResume;
 
         const currentThread = coroutine.running();
         if (currentThread && !threadIds.get(currentThread)) {
@@ -967,17 +1013,6 @@ export namespace Debugger {
         }
     }
 
-    function onError(err: unknown) {
-        if (skipNextBreak) {
-            skipNextBreak = false;
-            return;
-        }
-        const msg = mapSources(tostring(err));
-        const thread = coroutine.running() || mainThread;
-        Send.debugBreak(msg, "error", getThreadId(thread));
-        debugBreak(thread, 2);
-    }
-
     /** @tupleReturn */
     export function debugFunction(func: DebuggableFunction, breakImmediately: boolean | undefined, args: unknown[]) {
         Debugger.pushHook(HookType.Function);
@@ -986,7 +1021,7 @@ export namespace Debugger {
             Debugger.triggerBreak();
         }
 
-        const results = xpcall(() => func(...args), onError);
+        const results = xpcall(() => func(...args), breakForError);
         Debugger.popHook();
         if (results[0]) {
             return unpack(results, 2);
