@@ -23,9 +23,6 @@
 import {luaAssert, loadLuaFile} from "./luafuncs";
 import {Debugger} from "./debugger";
 
-//Ensure destructuring works in all lua versions
-_G.unpack = _G.unpack || (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack;
-
 //Don't buffer io
 io.stdout.setvbuf("no");
 io.stderr.setvbuf("no");

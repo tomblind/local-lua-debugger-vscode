@@ -28,7 +28,8 @@ import {
     luaCoroutineResume,
     luaDebugTraceback,
     loadLuaString,
-    luaGetEnv
+    luaGetEnv,
+    luaUnpack
 } from "./luafuncs";
 import {Path} from "./path";
 import {SourceMap} from "./sourcemap";
@@ -849,7 +850,7 @@ export namespace Debugger {
                 }
                 const results = xpcall(wrappedFunc, breakForError);
                 if (results[0]) {
-                    return unpack(results, 2);
+                    return luaUnpack(results, 2);
                 } else {
                     skipNextBreak = true;
                     const message = mapSources(tostring(results[1]));
@@ -881,7 +882,7 @@ export namespace Debugger {
             if (!results[0]) {
                 return breakForError(results[1], 1, true);
             }
-            return unpack(results, 2);
+            return luaUnpack(results, 2);
         }
         return resumer;
     }
@@ -1027,7 +1028,7 @@ export namespace Debugger {
         const results = xpcall(() => func(...args), breakForError);
         Debugger.popHook();
         if (results[0]) {
-            return unpack(results, 2);
+            return luaUnpack(results, 2);
         } else {
             skipNextBreak = true;
             const message = mapSources(tostring(results[1]));

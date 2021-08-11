@@ -46,6 +46,7 @@ export const luaCoroutineWrap = coroutine.wrap;
 export const luaDebugTraceback = debug.traceback;
 export const luaCoroutineCreate = coroutine.create;
 export const luaCoroutineResume = coroutine.resume;
+export const luaUnpack = (unpack || (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack);
 
 export const luaRawLen = rawlen || function<T extends object>(v: T | string): number {
     const mt = getmetatable(v);
