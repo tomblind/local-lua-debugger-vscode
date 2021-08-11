@@ -70,6 +70,7 @@ const metatableDisplayName = "[[metatable]]";
 const tableLengthDisplayName = "[[length]]";
 const envVariable = "LOCAL_LUA_DEBUGGER_VSCODE";
 const scriptRootsEnvVariable: LuaDebug.ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
+const breakInCoroutinesEnv: LuaDebug.BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
 
 function getEnvKey(env: NodeJS.ProcessEnv, searchKey: string) {
     const upperSearchKey = searchKey.toUpperCase();
@@ -208,9 +209,12 @@ export class LuaDebugSession extends LoggingDebugSession {
         //Set an environment variable so the debugger can detect the attached extension
         processOptions.env[envVariable] = "1";
 
-        //Pass script roots via environment variable
+        //Pass options via environment variables
         if (this.config.scriptRoots !== undefined) {
             processOptions.env[scriptRootsEnvVariable] = this.config.scriptRoots.join(";");
+        }
+        if (this.config.breakInCoroutines !== undefined) {
+            processOptions.env[breakInCoroutinesEnv] = this.config.breakInCoroutines ? "1" : "0";
         }
 
         //Append lua path so it can find debugger script

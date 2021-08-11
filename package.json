@@ -108,6 +108,11 @@
                                 },
                                 "description": "Alternate paths to find lua scripts"
                             },
+                            "breakInCoroutines": {
+                                "type": "boolean",
+                                "description": "Break on errors inside of coroutines",
+                                "default": true
+                            },
                             "verbose": {
                                 "type": "boolean",
                                 "description": "Enable verbose output",

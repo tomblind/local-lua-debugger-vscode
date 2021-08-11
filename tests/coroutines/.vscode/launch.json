@@ -9,7 +9,8 @@
                 "lua": "lua5.1",
                 "file": "${workspaceFolder}/main.lua"
             },
-            "verbose": true
+            "verbose": true,
+            "breakInCoroutines": false
         },
         {
             "name": "Lua 5.2",
@@ -19,7 +20,8 @@
                 "lua": "lua52",
                 "file": "${workspaceFolder}/main.lua"
             },
-            "verbose": true
+            "verbose": true,
+            "breakInCoroutines": false
         },
         {
             "name": "Lua 5.3",
@@ -29,7 +31,8 @@
                 "lua": "lua53",
                 "file": "${workspaceFolder}/main.lua"
             },
-            "verbose": true
+            "verbose": true,
+            "breakInCoroutines": true
         },
         {
             "name": "LuaJit",
@@ -39,7 +42,8 @@
                 "lua": "luajit",
                 "file": "${workspaceFolder}/main.lua"
             },
-            "verbose": true
+            "verbose": true,
+            "breakInCoroutines": true
         },
     ]
 }

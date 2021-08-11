@@ -39,6 +39,7 @@ export interface LaunchConfig {
     scriptRoots?: string[];
     verbose?: boolean;
     stopOnEntry?: boolean;
+    breakInCoroutines?: boolean;
 }
 
 export function isCustomProgramConfig(config: LuaProgramConfig | CustomProgramConfig): config is CustomProgramConfig {

@@ -838,8 +838,8 @@ export namespace Debugger {
         return canYieldAcrossPcall;
     }
 
-    function debuggerCoroutineCreate(f: Function) {
-        if (useXpcallInCoroutine()) {
+    function debuggerCoroutineCreate(f: Function, allowBreak: boolean) {
+        if (allowBreak && useXpcallInCoroutine()) {
             const originalFunc = f as DebuggableFunction;
             /** @tupleReturn **/
             function debugFunc(...args: unknown[]) {
@@ -874,7 +874,7 @@ export namespace Debugger {
 
     //coroutine.wrap replacement for hooking threads
     function debuggerCoroutineWrap(f: Function) {
-        const thread = debuggerCoroutineCreate(f);
+        const thread = debuggerCoroutineCreate(f, true);
         /** @tupleReturn */
         function resumer(...args: LuaVarArg<unknown[]>) {
             const results = luaCoroutineResume(thread, ...args);
@@ -965,6 +965,9 @@ export namespace Debugger {
         }
     }
 
+    const breakInCoroutinesEnv: LuaDebug.BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
+    const breakInCoroutines = os.getenv(breakInCoroutinesEnv) === "1";
+
     export function pushHook(hookType: HookType) {
         table.insert(hookStack, hookType);
 
@@ -974,9 +977,9 @@ export namespace Debugger {
             return;
         }
 
-        coroutine.create = debuggerCoroutineCreate;
+        coroutine.create = (f: Function) => debuggerCoroutineCreate(f, breakInCoroutines);
         coroutine.wrap = debuggerCoroutineWrap;
-        coroutine.resume = debuggerCoroutineResume;
+        coroutine.resume = breakInCoroutines ? debuggerCoroutineResume : luaCoroutineResume;
 
         const currentThread = coroutine.running();
         if (currentThread && !threadIds.get(currentThread)) {

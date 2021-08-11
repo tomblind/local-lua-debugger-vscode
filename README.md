@@ -87,18 +87,35 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 
 ---
 ## Additional Configuration Options
-- **`scriptRoots`**
-  - A list of alternate paths to find lua scripts. This is useful for environments like LÖVE, which use custom resolvers to find scripts in other locations than what is in `package.config`.
-- **`stopOnEntry`**
-  - Automatically break on first line after debug hook is set.
-- **`cwd`**
-  - Specify working directory to launch executable in. Default is the project directory.
-- **`args`**
-  - List of arguments to pass to Lua script or custom environment when launching.
-- **`env`**
-  - Specify environment variables to set when launching executable.
-- **`verbose`**
-  - Enable verbose output from debugger. Only useful when trying to identify problems with the debugger itself.
+#### `scriptRoots`
+
+A list of alternate paths to find lua scripts. This is useful for environments like LÖVE, which use custom resolvers to find scripts in other locations than what is in `package.config`.
+
+#### `breakInCoroutines`
+
+Break into the debugger when errors occur inside coroutines.
+- Coroutines created with `coroutine.wrap` will always break, regardless of this option.
+- In Lua 5.1, this will break where the coroutine was resumed and the message will contain the actual location of the error.
+
+#### `stopOnEntry`
+
+Automatically break on first line after debug hook is set.
+
+#### `cwd`
+
+Specify working directory to launch executable in. Default is the project directory.
+
+#### `args`
+
+List of arguments to pass to Lua script or custom environment when launching.
+
+#### `env`
+
+Specify environment variables to set when launching executable.
+
+#### `verbose`
+
+Enable verbose output from debugger. Only useful when trying to identify problems with the debugger itself.
 
 ---
 ## Custom Environment Examples
