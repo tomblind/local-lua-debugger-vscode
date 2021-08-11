@@ -10,7 +10,7 @@ local function addButton(text, x, y, w, h, cb)
 end
 
 local function errorImplicit()
-    require("lldebugger").call(function()
+    lldebugger.call(function()
         x = y / z
     end)
 end

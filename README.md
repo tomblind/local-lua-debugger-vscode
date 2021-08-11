@@ -72,6 +72,7 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 
 ---
 ## Tips
+- For convenience, a global reference to the debugger is always stored as `lldebugger`.
 - You can detect that the debugger extension is attached by inspecting the environment variable `LOCAL_LUA_DEBUGGER_VSCODE`. This is useful for conditionally starting the debugger in custom environments.
     ```lua
     if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
@@ -80,7 +81,7 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
     ```
 - Some custom environments will not break on uncaught runtime errors. To catch a runtime error, you can wrap the code with `lldebugger.call()`:
     ```lua
-    require("lldebugger").call(function()
+    lldebugger.call(function()
       --code causing runtime error
     end)
     ```
