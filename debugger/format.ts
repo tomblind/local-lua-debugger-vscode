@@ -49,7 +49,8 @@ export namespace Format {
     const escapesPattern = "[\n\r\"\\\b\f\t%z\x01-\x1F]";
 
     function replaceEscape(char: string) {
-        const [byte] = string.byte(char);
+        let [byte] = luaAssert(...string.byte(char));
+        byte = luaAssert(byte);
         if (byte >= 0 && byte < 32) { //Control characters
             return string.format("\\u%.4X", byte);
         }
@@ -79,7 +80,7 @@ export namespace Format {
         return true;
     }
 
-    export function asJson(val: unknown, indent = 0, tables?: LuaTable<unknown, boolean>) {
+    export function asJson(val: {}, indent = 0, tables?: LuaTable<{}, boolean>) {
         tables = tables || new LuaTable();
 
         const valType = type(val);
@@ -88,7 +89,7 @@ export namespace Format {
 
             if (isArray(val as object)) {
                 const arrayVals: string[] = [];
-                for (const [_, arrayVal] of ipairs(val as unknown[])) {
+                for (const [_, arrayVal] of ipairs(val as {}[])) {
                     const valStr = asJson(arrayVal, indent + 1, tables);
                     table.insert(arrayVals, `\n${indentStr.rep(indent + 1)}${valStr}`);
                 }

@@ -43,7 +43,7 @@ export interface Var {
 }
 
 export interface Vars {
-    [name: string]: Var;
+    [name: string]: Var | undefined;
 }
 
 export interface Local extends Var {
@@ -55,9 +55,8 @@ export interface Locals {
 }
 
 export namespace Debugger {
-    /** @tupleReturn */
     export interface DebuggableFunction {
-        (this: void, ...args: unknown[]): unknown[];
+        (this: void, ...args: unknown[]): LuaMultiReturn<unknown[]>;
     }
 
     const prompt = "";
@@ -83,8 +82,8 @@ export namespace Debugger {
 
     function backtrace(stack: debug.FunctionInfo[], frameIndex: number) {
         const frames: LuaDebug.Frame[] = [];
-        for (const i of forRange(0, stack.length - 1)) {
-            const info = stack[i];
+        for (const i of $range(0, stack.length - 1)) {
+            const info = luaAssert(stack[i]);
             const frame: LuaDebug.Frame = {
                 source: info.source && Path.format(info.source) || "?",
                 line: info.currentline && luaAssert(tonumber(info.currentline)) || -1
@@ -184,7 +183,7 @@ export namespace Debugger {
             return ups;
         }
 
-        for (const index of forRange(1, info.nups)) {
+        for (const index of $range(1, info.nups)) {
             const [name, val] = debug.getupvalue(info.func, index);
             ups[luaAssert(name)] = {val, index, type: type(val)};
         }
@@ -192,7 +191,7 @@ export namespace Debugger {
         return ups;
     }
 
-    function populateGlobals(globs: Vars, tbl: Record<string, unknown>, metaStack: LuaTable<unknown, boolean>) {
+    function populateGlobals(globs: Vars, tbl: Record<string, unknown>, metaStack: LuaTable<{}, boolean>) {
         metaStack.set(tbl, true);
 
         const meta = getmetatable(tbl) as Record<string, unknown> | undefined;
@@ -209,7 +208,7 @@ export namespace Debugger {
     function getGlobals(level: number, thread: Thread): Vars {
         const globs: Vars = {};
         const fenv = luaGetEnv(level, isThread(thread) && thread || undefined) || _G;
-        const metaStack = new LuaTable<unknown, boolean>();
+        const metaStack = new LuaTable<{}, boolean>();
         populateGlobals(globs, fenv, metaStack);
         return globs;
     }
@@ -229,7 +228,7 @@ export namespace Debugger {
             }
         }
         for (const [_, name] of ipairs(removeVars)) {
-            delete vars[name];
+            vars[name] = undefined;
         }
         for (const [name, info] of pairs(addVars)) {
             vars[name] = info;
@@ -260,7 +259,7 @@ export namespace Debugger {
         let nameIsProperty = false;
         let nonNameStart = 1;
         let mappedExpression = "";
-        for (const i of forRange(1, expression.length)) {
+        for (const i of $range(1, expression.length)) {
             const char = expression.sub(i, i);
             if (inQuote) {
                 if (char === "\\") {
@@ -299,17 +298,16 @@ export namespace Debugger {
         return mappedExpression;
     }
 
-    /** @tupleReturn */
     function execute(
         statement: string,
         thread: Thread,
         frame: number,
         frameOffset: number,
         info: debug.FunctionInfo
-    ): [true, unknown] | [false, string] {
+    ): LuaMultiReturn<[true, unknown] | [false, string]> {
         const activeThread = coroutine.running();
         if (activeThread && !isThread(thread)) {
-            return [false, "unable to access main thread while running in a coroutine"];
+            return $multi(false, "unable to access main thread while running in a coroutine");
         }
 
         const level = (thread === (activeThread || mainThread)) && (frame + frameOffset + 1) || frame;
@@ -341,7 +339,7 @@ export namespace Debugger {
 
         const [func, err] = loadLuaString(statement, env);
         if (!func) {
-            return [false, err as string];
+            return $multi(false, err as string);
         }
 
         const [success, result] = pcall(func);
@@ -357,7 +355,7 @@ export namespace Debugger {
                 debug.setupvalue(luaAssert(info.func), up.index, up.val);
             }
         }
-        return [success as true, result];
+        return $multi(success as true, result);
     }
 
     function getInput() {
@@ -842,9 +840,7 @@ export namespace Debugger {
     function debuggerCoroutineCreate(f: Function, allowBreak: boolean) {
         if (allowBreak && useXpcallInCoroutine()) {
             const originalFunc = f as DebuggableFunction;
-            /** @tupleReturn **/
             function debugFunc(...args: unknown[]) {
-                /** @tupleReturn **/
                 function wrappedFunc() {
                     return originalFunc(...args);
                 }
@@ -854,7 +850,7 @@ export namespace Debugger {
                 } else {
                     skipNextBreak = true;
                     const message = mapSources(tostring(results[1]));
-                    luaError(message, 2);
+                    return luaError(message, 2);
                 }
             }
             f = debugFunc;
@@ -864,8 +860,10 @@ export namespace Debugger {
         return thread;
     }
 
-    /** @tupleReturn */
-    function debuggerCoroutineResume(thread: LuaThread, ...args: unknown[]): [true, ...unknown[]] | [false, string] {
+    function debuggerCoroutineResume(
+        thread: LuaThread,
+        ...args: unknown[]
+    ): LuaMultiReturn<[true, ...unknown[]] | [false, string]> {
         const results = luaCoroutineResume(thread, ...args);
         if (!results[0]) {
             breakForError(results[1], 2);
@@ -876,8 +874,7 @@ export namespace Debugger {
     //coroutine.wrap replacement for hooking threads
     function debuggerCoroutineWrap(f: Function) {
         const thread = debuggerCoroutineCreate(f, true);
-        /** @tupleReturn */
-        function resumer(...args: LuaVarArg<unknown[]>) {
+        function resumer(...args: unknown[]) {
             const results = luaCoroutineResume(thread, ...args);
             if (!results[0]) {
                 return breakForError(results[1], 1, true);
@@ -924,13 +921,12 @@ export namespace Debugger {
         return breakForError(message, (level || 0) + 1, true);
     }
 
-    /** @tupleReturn */
-    function debuggerAssert(v: unknown, ...args: LuaVarArg<unknown[]>) {
+    function debuggerAssert(v: unknown, ...args: unknown[]) {
         if (!v) {
             const message = args[0] !== undefined && args[0] || "assertion failed";
             return breakForError(message, 1, true);
         }
-        return [v, ...args];
+        return $multi(v, ...args);
     }
 
     function setErrorHandler() {
@@ -1017,7 +1013,6 @@ export namespace Debugger {
         }
     }
 
-    /** @tupleReturn */
     export function debugFunction(func: DebuggableFunction, breakImmediately: boolean | undefined, args: unknown[]) {
         Debugger.pushHook(HookType.Function);
 
@@ -1032,7 +1027,7 @@ export namespace Debugger {
         } else {
             skipNextBreak = true;
             const message = mapSources(tostring(results[1]));
-            luaError(message, 2);
+            return luaError(message, 2);
         }
     }
 }

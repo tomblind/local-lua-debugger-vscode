@@ -613,7 +613,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         if (this.process !== undefined) {
             if (process.platform === "win32") {
-                child_process.spawn("taskkill", ["/pid", this.process.pid.toString(), "/f", "/t"]);
+                child_process.spawn("taskkill", ["/pid", this.assert(this.process.pid).toString(), "/f", "/t"]);
             } else {
                 this.process.kill();
             }
@@ -857,6 +857,6 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     private waitForConfiguration() {
-        return new Promise(resolve => this.onConfigurationDone = resolve);
+        return new Promise<void>(resolve => this.onConfigurationDone = resolve);
     }
 }

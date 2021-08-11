@@ -34,11 +34,10 @@ declare function assert<V>(this: void, v: V): Exclude<V, undefined | null | fals
  * Issues an error when the value of its argument `v` is false (i.e., nil or false); otherwise, returns all its
  *   arguments. `message` is an error message; when absent, it defaults to "assertion failed!"
 */
-/** @tupleReturn */
-declare function assert<V extends [unknown, ...unknown[]]>(
+declare function assert<V extends unknown[]>(
     this: void,
     ...v: V
-): { [I in keyof V]: I extends "0" ? Exclude<V[I], undefined | null | false> : V[I] };
+): LuaMultiReturn<{ [I in keyof V]: I extends "0" ? Exclude<V[I], undefined | null | false> : V[I] }>;
 
 /**
  * This function is a generic interface to the garbage collector. It performs different functions according to its first
@@ -117,8 +116,7 @@ declare function collectgarbage(this: void, opt: "setpause" | "setstepmul", arg:
  *   contents of the standard input (`stdin`). Returns all values returned by the chunk. In case of errors, `dofile`
  *   propagates the error to its caller (that is, `dofile` does not run in protected mode).
 */
-/** @tupleReturn */
-declare function dofile(this: void, filename?: string): unknown[];
+declare function dofile(this: void, filename?: string): LuaMultiReturn<unknown[]>;
 
 /**
  * Terminates the last protected function called and returns `message` as the error message. Function `error` never
@@ -149,9 +147,6 @@ declare function getfenv(this: void, f: Function | number): unknown;
 */
 declare function getmetatable(this: void, object: unknown): unknown;
 
-/** @luaIterator @tupleReturn */
-declare interface LuaIpairsIterable<T> extends Array<[number, T]> {}
-
 /**
  * Returns three values: an iterator function, the table `t`, and 0, so that the construction
  *
@@ -159,7 +154,7 @@ declare interface LuaIpairsIterable<T> extends Array<[number, T]> {}
  *
  * will iterate over the pairs (`1,t[1]`), (`2,t[2]`), ..., up to the first integer key absent from the table.
 */
-declare function ipairs<T>(this: void, t: T[]): LuaIpairsIterable<T>;
+declare function ipairs<T>(this: void, t: T[]): LuaIterable<LuaMultiReturn<[number, T]>>;
 
 /**
  * Loads a chunk using function `func` to get its pieces. Each call to `func` must return a string that concatenates
@@ -171,18 +166,19 @@ declare function ipairs<T>(this: void, t: T[]): LuaIpairsIterable<T>;
  * `chunkname` is used as the chunk name for error messages and debug information. When absent, it defaults to
  *   "`=(load)`".
 */
-/** @tupleReturn */
 declare function load(
     this: void,
     func: { (this: void): string | undefined; },
     chunkname?: string
-): [{ (this: void): unknown; }, undefined] | [undefined, string];
+): LuaMultiReturn<[{ (this: void): unknown; }, undefined] | [undefined, string]>;
 
 /**
  * Similar to `load`, but gets the chunk from file `filename` or from the standard input, if no file name is given.
 */
-/** @tupleReturn */
-declare function loadfile(this: void, filename?: string): [{ (this: void): unknown; }, undefined] | [undefined, string];
+declare function loadfile(
+    this: void,
+    filename?: string
+): LuaMultiReturn<[{ (this: void): unknown; }, undefined] | [undefined, string]>;
 
 /**
  * Similar to `load`, but gets the chunk from the given string.
@@ -193,12 +189,11 @@ declare function loadfile(this: void, filename?: string): [{ (this: void): unkno
  *
  * When absent, `chunkname` defaults to the given string.
 */
-/** @tupleReturn */
 declare function loadstring(
     this: void,
     string_?: string,
     chunkname?: string
-): [{ (this: void): unknown; }, undefined] | [undefined, string];
+): LuaMultiReturn<[{ (this: void): unknown; }, undefined] | [undefined, string]>;
 
 /**
  * Allows a program to traverse all fields of a table. Its first argument is a table and its second argument is an index
@@ -213,11 +208,7 @@ declare function loadstring(
  * The behavior of `next` is undefined if, during the traversal, you assign any value to a non-existent field in the
  *   table. You may however modify existing fields. In particular, you may clear existing fields.
 */
-/** @tupleReturn */
-declare function next<T extends object>(this: void, table: T, index?: keyof T): [keyof T, T[keyof T]];
-
-/** @luaIterator @tupleReturn */
-declare interface LuaPairsIterable<T> extends Array<[keyof T, T[keyof T]]> {}
+declare function next<T extends object>(this: void, table: T, index?: keyof T): LuaMultiReturn<[keyof T, T[keyof T]]>;
 
 /**
  * Returns three values: the `next` function, the table `t`, and nil, so that the construction
@@ -228,7 +219,8 @@ declare interface LuaPairsIterable<T> extends Array<[keyof T, T[keyof T]]> {}
  *
  * See function `next` for the caveats of modifying the table during its traversal.
 */
-declare function pairs<T extends object>(this: void, t: T): LuaPairsIterable<T>;
+declare function pairs<K, V>(this: void, t: LuaTable<K, V>): LuaIterable<LuaMultiReturn<[K, Exclude<V, null | undefined>]>>;
+declare function pairs<T extends object>(this: void, t: T): LuaIterable<LuaMultiReturn<[keyof T, Exclude<T[keyof T], null | undefined>]>>;
 
 /**
  * Calls function `f` with the given arguments in protected mode. This means that any error inside `f` is not
@@ -236,13 +228,12 @@ declare function pairs<T extends object>(this: void, t: T): LuaPairsIterable<T>;
  *   boolean), which is true if the call succeeds without errors. In such case, `pcall` also returns all results from
  *   the call, after this first result. In case of any error, `pcall` returns false plus the error message.
 */
-/** @tupleReturn */
 declare function pcall<T, A extends unknown[], R>(
     this: void,
     f: { (this: T, ...args: A): R; },
     self: T,
     ...args: A
-): [true, R] | [false, string];
+): LuaMultiReturn<[true, R] | [false, string]>;
 
 /**
  * Calls function `f` with the given arguments in protected mode. This means that any error inside `f` is not
@@ -250,12 +241,11 @@ declare function pcall<T, A extends unknown[], R>(
  *   boolean), which is true if the call succeeds without errors. In such case, `pcall` also returns all results from
  *   the call, after this first result. In case of any error, `pcall` returns false plus the error message.
 */
-/** @tupleReturn */
 declare function pcall<A extends unknown[], R>(
     this: void,
     f: { (this: void, ...args: A): R; },
     ...args: A
-): [true, R] | [false, string];
+): LuaMultiReturn<[true, R] | [false, string]>;
 
 /**
  * Receives any number of arguments, and prints their values to `stdout`, using the `tostring` function to convert them
@@ -285,8 +275,7 @@ declare function rawset<T extends object, I extends keyof T>(this: void, table: 
  * If `index` is a number, returns all arguments after argument number `index`. Otherwise, `index` must be the string
  *   `"#"`, and `select` returns the total number of extra arguments it received.
 */
-/** @tupleReturn */
-declare function select<A extends unknown[]>(this: void, index: number, ...args: A): A[number][];
+declare function select<A extends unknown[]>(this: void, index: number, ...args: A): LuaMultiReturn<A[number][]>;
 
 /**
  * If `index` is a number, returns all arguments after argument number `index`. Otherwise, `index` must be the string
@@ -389,8 +378,7 @@ declare function type(
  * except that the above code can be written only for a fixed number of elements. By default, `i` is 1 and `j` is the
  *   length of the list, as defined by the length operator (see 2.5.5).
 */
-/** @tupleReturn */
-declare function unpack<A extends unknown[]>(this: void, list: A): A;
+declare function unpack<A extends unknown[]>(this: void, list: A): LuaMultiReturn<A>;
 
 /**
  * Returns the elements from the given table. This function is equivalent to
@@ -399,8 +387,7 @@ declare function unpack<A extends unknown[]>(this: void, list: A): A;
  * except that the above code can be written only for a fixed number of elements. By default, `i` is 1 and `j` is the
  *   length of the list, as defined by the length operator (see 2.5.5).
 */
-/** @tupleReturn */
-declare function unpack<T>(this: void, list: T[], i: number, j?: number): T[];
+declare function unpack<T>(this: void, list: T[], i: number, j?: number): LuaMultiReturn<T[]>;
 
 /**
  * A global variable (not a function) that holds a string containing the current interpreter version. The current
@@ -417,12 +404,11 @@ declare const _VERSION: "Lua 5.1";
  *   errors. In this case, `xpcall` also returns all results from the call, after this first result. In case of any
  *   error, `xpcall` returns false plus the result from `err`.
 */
-/** @tupleReturn */
 declare function xpcall<R>(
     this: void,
     f: { (this: void): R; },
     err: { (this: void, msg: string): void; }
-): [true, R] | [false, string];
+): LuaMultiReturn<[true, R] | [false, string]>;
 
 declare namespace coroutine {
     /**
@@ -440,8 +426,11 @@ declare namespace coroutine {
      *   coroutine yields) or any values returned by the body function (if the coroutine terminates). If there is any
      *   error, `resume` returns false plus the error message.
     */
-    /** @tupleReturn */
-    export function resume(this: void, co: LuaThread, ...args: unknown[]): [true, ...unknown[]] | [false, string];
+    export function resume(
+        this: void,
+        co: LuaThread,
+        ...args: unknown[]
+    ): LuaMultiReturn<[true, ...unknown[]] | [false, string]>;
 
     /**
      * Returns the running coroutine, or nil when called by the main thread.
@@ -456,8 +445,7 @@ declare namespace coroutine {
     */
     export function status(this: void, co: LuaThread): "running" | "suspended" | "normal" | "dead";
 
-    /** @tupleReturn */
-    export interface WrappedFunction { (this: void, ...args: unknown[]): unknown[]; }
+    export interface WrappedFunction { (this: void, ...args: unknown[]): LuaMultiReturn<unknown[]>; }
 
     /**
      * Creates a new coroutine, with body `f`. `f` must be a Lua function. Returns a function that resumes the coroutine
@@ -470,7 +458,7 @@ declare namespace coroutine {
      * Suspends the execution of the calling coroutine. The coroutine cannot be running a C function, a metamethod, or
      *   an iterator. Any arguments to `yield` are passed as extra results to `resume`.
     */
-    export function yield(this: void, ...args: unknown[]): unknown;
+    export function yield(this: void, ...args: unknown[]): LuaMultiReturn<unknown[]>;
 }
 
 declare type LuaModule = { _NAME: string; _M: LuaModule; } & { [key: string]: unknown; };
@@ -618,8 +606,7 @@ declare namespace string {
      *   is 1; the default value for `j` is `i`. Note that numerical codes are not necessarily portable across
      *   platforms.
     */
-    /** @tupleReturn */
-    export function byte(this: void, s: string, i?: string, j?: string): number[];
+    export function byte(this: void, s: string, i?: string, j?: string): LuaMultiReturn<number[]>;
 
     /**
      * Receives zero or more integers. Returns a string with length equal to the number of arguments, in which each
@@ -643,14 +630,13 @@ declare namespace string {
      *   then `init` must be given as well. If the pattern has captures, then in a successful match the captured values
      *   are also returned, after the two indices.
     */
-    /** @tupleReturn */
     export function find(
         this: void,
         s: string,
         pattern: string,
         init?: number,
         plain?: boolean
-    ): [number, number, ...string[]] | [undefined];
+    ): LuaMultiReturn<[number, number, ...string[]] | [undefined]>;
 
     /**
      * Returns a formatted version of its variable number of arguments following the description given in its first
@@ -672,9 +658,6 @@ declare namespace string {
      * This function does not accept string values containing embedded zeros, except as arguments to the `q` option.
     */
     export function format(this: void, formatstring: string, ...args: unknown[]): string;
-
-    /** @luaIterator @tupleReturn */
-    export interface GmatchIterable extends Array<string[]> {}
 
     /**
      * Returns an iterator function that, each time it is called, returns the next captures from `pattern` over string
@@ -698,7 +681,7 @@ declare namespace string {
      * For this function, a '`^`' at the start of a pattern does not work as an anchor, as this would prevent the
      *   iteration.
     */
-    export function gmatch(this: void, s: string, pattern: string): string.GmatchIterable;
+    export function gmatch(this: void, s: string, pattern: string): LuaIterable<LuaMultiReturn<string[]>>;
 
     /**
      * Returns a copy of `s` in which all (or the first `n`, if given) occurrences of the `pattern` have been replaced
@@ -742,14 +725,13 @@ declare namespace string {
      *      x = string.gsub("$name-$version.tar.gz", "%$(%w+)", t)
      *      -->; x="lua-5.1.tar.gz"
     */
-    /** @tupleReturn */
     export function gsub(
         this: void,
         s: string,
         pattern: string,
         repl: string | Record<string, string | number> | { (this: void, ...args: string[]): string | number; },
         n?: number
-    ): [string, number];
+    ): LuaMultiReturn<[string, number]>;
 
     /**
      * Receives a string and returns its length. The empty string `""` has length 0. Embedded zeros are counted, so
@@ -769,8 +751,12 @@ declare namespace string {
      *   third, optional numerical argument `init` specifies where to start the search; its default value is 1 and can
      *   be negative.
     */
-    /** @tupleReturn */
-    export function match(this: void, s: string, pattern: string, init?: number): string[] | [undefined];
+    export function match(
+        this: void,
+        s: string,
+        pattern: string,
+        init?: number
+    ): LuaMultiReturn<string[] | [undefined]>;
 
     /**
      * Returns a string that is the concatenation of `n` copies of the string `s`.
@@ -1022,9 +1008,6 @@ declare namespace io {
     */
     export function input(this: void, file?: string | LuaFile): LuaFile;
 
-    /** @luaIterator */
-    export interface FileLinesIterable extends Array<string> {}
-
     /**
      * Opens the given file name in read mode and returns an iterator function that, each time it is called, returns a
      *   new line from the file. Therefore, the construction
@@ -1037,7 +1020,7 @@ declare namespace io {
      * The call `io.lines()` (with no file name) is equivalent to `io.input():lines()`; that is, it iterates over the
      *   lines of the default input file. In this case it does not close the file when the loop ends.
     */
-    export function lines(this: void, filename?: string): FileLinesIterable;
+    export function lines(this: void, filename?: string): LuaIterable<string>;
 
     /**
      * This function opens a file, in the mode specified in the string `mode`. It returns a new file handle, or, in case
@@ -1054,12 +1037,11 @@ declare namespace io {
      * The `mode` string can also have a '`b`' at the end, which is needed in some systems to open the file in binary
      *   mode. This string is exactly what is used in the standard C function `fopen`.
     */
-    /** @tupleReturn */
     export function open(
         this: void,
         filename: string,
         mode?: "r" | "w" | "a" | "r+" | "w+" | "a+" | "rb" | "wb" | "ab" | "r+b" | "w+b" | "a+b"
-    ): [LuaFile] | [undefined, string];
+    ): LuaMultiReturn<[LuaFile] | [undefined, string]>;
 
     /**
      * Similar to `io.input`, but operates over the default output file.
@@ -1072,8 +1054,7 @@ declare namespace io {
      *
      * This function is system dependent and is not available on all platforms.
     */
-    /** @tupleReturn */
-    export function popen(this: void, prog: string, mode?: "r" | "w"): [LuaFile] | [undefined, string];
+    export function popen(this: void, prog: string, mode?: "r" | "w"): LuaMultiReturn<[LuaFile] | [undefined, string]>;
 
     export type FileReadFormat = "*n" | "*a" | "*l" | number;
 
@@ -1091,8 +1072,10 @@ declare namespace io {
     /**
      * Equivalent to `io.input():read`.
     */
-    /** @tupleReturn */
-    export function read<A extends FileReadFormat[]>(this: void, ...formats: A): FileReadFormatTypeTuple<A>;
+    export function read<A extends FileReadFormat[]>(
+        this: void,
+        ...formats: A
+    ): LuaMultiReturn<FileReadFormatTypeTuple<A>>;
 
     export const stderr: LuaFile;
 
@@ -1115,8 +1098,7 @@ declare namespace io {
     /**
      * Equivalent to `io.output():write`.
     */
-    /** @tupleReturn */
-    export function write(this: void, ...args: (string | number)[]): [LuaFile] | [undefined, string];
+    export function write(this: void, ...args: (string | number)[]): LuaMultiReturn<[LuaFile] | [undefined, string]>;
 }
 
 declare interface LuaFile {
@@ -1140,7 +1122,7 @@ declare interface LuaFile {
      * will iterate over all lines of the file. (Unlike `io.lines`, this function does not close the file when the loop
      *   ends.)
     */
-    lines(this: this): io.FileLinesIterable;
+    lines(this: this): LuaIterable<string>;
 
     /**
      * Reads the file `file`, according to the given formats, which specify what to read. For each format, the function
@@ -1170,8 +1152,7 @@ declare interface LuaFile {
      * - number: reads a string with up to this number of characters, returning nil on end of file. If number is zero,
      *   it reads nothing and returns an empty string, or nil on end of file.
     */
-    /** @tupleReturn */
-    read<A extends io.FileReadFormat[]>(this: this, ...formats: A): io.FileReadFormatTypeTuple<A>;
+    read<A extends io.FileReadFormat[]>(this: this, ...formats: A): LuaMultiReturn<io.FileReadFormatTypeTuple<A>>;
 
     /**
      * Sets and gets the file position, measured from the beginning of the file, to the position given by `offset` plus
@@ -1188,8 +1169,7 @@ declare interface LuaFile {
      *   the file (and returns 0); and the call `file:seek("end")` sets the position to the end of the file, and returns
      *   its size.
     */
-    /** @tupleReturn */
-    seek(this: this, whence?: "set" | "cur" | "end", offset?: number): [number] | [undefined, string];
+    seek(this: this, whence?: "set" | "cur" | "end", offset?: number): LuaMultiReturn<[number] | [undefined, string]>;
 
     /**
      * Sets the buffering mode for an output file. There are three available modes:
@@ -1219,8 +1199,7 @@ declare interface LuaFile {
      * Writes the value of each of its arguments to the `file`. The arguments must be strings or numbers. To write other
      *   values, use `tostring` or `string.format` before `write`.
     */
-    /** @tupleReturn */
-    write(this: this, ...args: (string | number)[]): [LuaFile] | [undefined, string];
+    write(this: this, ...args: (string | number)[]): LuaMultiReturn<[LuaFile] | [undefined, string]>;
 }
 
 declare namespace os {
@@ -1313,15 +1292,13 @@ declare namespace os {
      * Deletes the file or directory with the given name. Directories must be empty to be removed. If this function
      *   fails, it returns nil, plus a string describing the error.
     */
-    /** @tupleReturn */
-    export function remove(this: void, filename: string): [true] | [undefined, string, number];
+    export function remove(this: void, filename: string): LuaMultiReturn<[true] | [undefined, string, number]>;
 
     /**
      * Renames file or directory named `oldname` to `newname`. If this function fails, it returns nil, plus a string
      *   describing the error.
     */
-    /** @tupleReturn */
-    export function rename(this: void, oldname: string, newname: string): [true] | [undefined, string];
+    export function rename(this: void, oldname: string, newname: string): LuaMultiReturn<[true] | [undefined, string]>;
 
     /**
      * Sets the current locale of the program. `locale` is a string specifying a locale; `category` is an optional
@@ -1391,8 +1368,7 @@ declare namespace debug {
      * Returns the current hook settings of the thread, as three values: the current hook function, the current hook
      *   mask, and the current hook count (as set by the `debug.sethook` function).
     */
-    /** @tupleReturn */
-    export function gethook(this: void, thread?: LuaThread): [Hook, string, number];
+    export function gethook(this: void, thread?: LuaThread): LuaMultiReturn<[Hook, string, number]>;
 
     export interface FunctionInfo {
         name?: string;
@@ -1452,8 +1428,7 @@ declare namespace debug {
      * Variable names starting with '`(`' (open parentheses) represent internal variables (loop control variables,
      *   temporaries, and C function locals).
     */
-    /** @tupleReturn */
-    export function getlocal(this: void, level: number, local: number): [string, unknown] | [undefined];
+    export function getlocal(this: void, level: number, local: number): LuaMultiReturn<[string, unknown] | [undefined]>;
 
     /**
      * This function returns the name and the value of the local variable with index `local` of the function at level
@@ -1465,13 +1440,12 @@ declare namespace debug {
      * Variable names starting with '`(`' (open parentheses) represent internal variables (loop control variables,
      *   temporaries, and C function locals).
     */
-    /** @tupleReturn */
     export function getlocal(
         this: void,
         thread: LuaThread,
         level: number,
         local: number
-    ): [string, unknown] | [undefined];
+    ): LuaMultiReturn<[string, unknown] | [undefined]>;
 
     /**
      * Returns the metatable of the given `object` or nil if it does not have a metatable.
@@ -1487,8 +1461,7 @@ declare namespace debug {
      * This function returns the name and the value of the upvalue with index `up` of the function `func`. The function
      *   returns nil if there is no upvalue with the given index.
     */
-    /** @tupleReturn */
-    export function getupvalue(this: void, func: Function, up: number): [string, unknown] | [undefined];
+    export function getupvalue(this: void, func: Function, up: number): LuaMultiReturn<[string, unknown] | [undefined]>;
 
     /**
      * Sets the environment of the given `object` to the given `table`. Returns `object`.
@@ -1629,8 +1602,7 @@ declare interface String {
      *   is 1; the default value for `j` is `i`. Note that numerical codes are not necessarily portable across
      *   platforms.
     */
-    /** @tupleReturn */
-    byte(this: this, i?: string, j?: string): number[];
+    byte(this: this, i?: string, j?: string): LuaMultiReturn<number[]>;
 
     /**
      * Looks for the first match of `pattern` in the string `s`. If it finds a match, then `find` returns the indices of
@@ -1641,8 +1613,12 @@ declare interface String {
      *   then `init` must be given as well. If the pattern has captures, then in a successful match the captured values
      *   are also returned, after the two indices.
     */
-    /** @tupleReturn */
-    find(this: this, pattern: string, init?: number, plain?: boolean): [number, number, ...string[]] | [undefined];
+    find(
+        this: this,
+        pattern: string,
+        init?: number,
+        plain?: boolean
+    ): LuaMultiReturn<[number, number, ...string[]] | [undefined]>;
 
     /**
      * Returns a formatted version of its variable number of arguments following the description given in its first
@@ -1687,7 +1663,7 @@ declare interface String {
      * For this function, a '`^`' at the start of a pattern does not work as an anchor, as this would prevent the
      *   iteration.
     */
-    gmatch(this: this, pattern: string): string.GmatchIterable;
+    gmatch(this: this, pattern: string): LuaIterable<LuaMultiReturn<string[]>>;
 
     /**
      * Returns a copy of `s` in which all (or the first `n`, if given) occurrences of the `pattern` have been replaced
@@ -1731,13 +1707,12 @@ declare interface String {
      *      x = string.gsub("$name-$version.tar.gz", "%$(%w+)", t)
      *      -->; x="lua-5.1.tar.gz"
     */
-    /** @tupleReturn */
     gsub(
         this: this,
         pattern: string,
         repl: string | Record<string, string | number> | { (this: void, ...args: string[]): string | number; },
         n?: number
-    ): [string, number];
+    ): LuaMultiReturn<[string, number]>;
 
     /**
      * Receives a string and returns its length. The empty string `""` has length 0. Embedded zeros are counted, so
@@ -1757,8 +1732,7 @@ declare interface String {
      *   third, optional numerical argument `init` specifies where to start the search; its default value is 1 and can
      *   be negative.
     */
-    /** @tupleReturn */
-    match(this: this, pattern: string, init?: number): string[] | [undefined];
+    match(this: this, pattern: string, init?: number): LuaMultiReturn<string[] | [undefined]>;
 
     /**
      * Returns a string that is the concatenation of `n` copies of the string `s`.

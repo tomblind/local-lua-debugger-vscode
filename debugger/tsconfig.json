@@ -5,9 +5,11 @@
         "strict": true,
         "keyofStringsOnly": true,
         "typeRoots": [],
+        "types": ["typescript-to-lua/language-extensions"],
         "noLib": true,
         "sourceMap": true,
-        "rootDir": "."
+        "rootDir": ".",
+        "noUncheckedIndexedAccess": true
     },
     "include": [
         "./**/*.ts"
@@ -18,6 +20,7 @@
         "noImplicitSelf": true,
         "noHeader": true,
         "luaBundle": "lldebugger.lua",
-        "luaBundleEntry": "lldebugger.ts"
+        "luaBundleEntry": "lldebugger.ts",
+        "luaLibImport": "none"
     }
 }

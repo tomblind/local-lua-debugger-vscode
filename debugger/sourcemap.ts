@@ -60,14 +60,14 @@ export namespace SourceMap
         const bits: boolean[] = [];
         for (const [c] of input.gmatch(".")) {
             let sextet = luaAssert(base64Lookup[c]);
-            for (const i of forRange(1, 6)) {
+            for (const i of $range(1, 6)) {
                 const bit = sextet % 2 !== 0;
                 table.insert(bits, i, bit);
                 sextet = math.floor(sextet / 2);
             }
             if (bits.length >= 8) {
                 let value = 0;
-                for (const i of forRange(7, 0, -1)) {
+                for (const i of $range(7, 0, -1)) {
                     const bit = table.remove(bits);
                     if (bit) {
                         value += (2 ** i);
@@ -84,7 +84,7 @@ export namespace SourceMap
         let bits: boolean[] = [];
         for (const [c] of input.gmatch(".")) {
             let sextet = luaAssert(base64Lookup[c]);
-            for (const _ of forRange(1, 5)) {
+            for (const _ of $range(1, 5)) {
                 const bit = sextet % 2 !== 0;
                 table.insert(bits, bit);
                 sextet = math.floor(sextet / 2);
@@ -92,7 +92,7 @@ export namespace SourceMap
             const continueBit = sextet % 2 !== 0;
             if (!continueBit) {
                 let value = 0;
-                for (const i of forRange(1, bits.length - 1)) {
+                for (const i of $range(1, bits.length - 1)) {
                     if (bits[i]) {
                         value += (2 ** (i - 1));
                     }

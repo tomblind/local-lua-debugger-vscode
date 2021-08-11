@@ -48,7 +48,6 @@ export function stop() {
 }
 
 //Load and debug the specified file
-/** @tupleReturn */
 export function runFile(filePath: unknown, breakImmediately?: boolean, arg?: object) {
     if (typeof filePath !== "string") {
         throw `expected string as first argument to runFile, but got '${type(filePath)}'`;
@@ -62,7 +61,6 @@ export function runFile(filePath: unknown, breakImmediately?: boolean, arg?: obj
 }
 
 //Call and debug the specified function
-/** @tupleReturn */
 export function call(func: unknown, breakImmediately?: boolean, ...args: unknown[]) {
     if (typeof func !== "function") {
         throw `expected string as first argument to debugFile, but got '${type(func)}'`;

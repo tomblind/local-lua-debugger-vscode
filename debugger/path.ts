@@ -52,7 +52,6 @@ export namespace Path {
         return dir || ".";
     }
 
-    /** @tupleReturn */
     export function splitDrive(path: string) {
         let [drive, pathPart] = path.match(`^[@=]?([a-zA-Z]:)[\\/](.*)`);
         if (drive) {
@@ -60,7 +59,7 @@ export namespace Path {
         } else {
             [drive, pathPart] = path.match(`^[@=]?([\\/]*)(.*)`);
         }
-        return [luaAssert(drive), luaAssert(pathPart)];
+        return $multi(luaAssert(drive), luaAssert(pathPart));
     }
 
     const formattedPathCache: Record<string, string> = {};

@@ -124,7 +124,7 @@ export namespace Send {
         if (kind === "indexed") {
             first = first || 1;
             const last = count && (first + count - 1) || (first + luaRawLen(tbl) - 1);
-            for (const i of forRange(first, last)) {
+            for (const i of $range(first, last)) {
                 const val = (tbl as Record<string, unknown>)[i];
                 const name = getPrintableValue(i);
                 const dbgVar = buildVariable(name, val);

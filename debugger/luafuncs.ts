@@ -23,22 +23,20 @@
 // Lua 5.2+ versions
 declare function rawlen<T extends object>(this: void, v: T | string): number;
 
-/** @tupleReturn */
 declare function load(
     this: void,
     chunk: string,
     chunkname?: string,
     mode?: "b" | "t" | "bt",
     env?: Object
-): [{ (this: void): unknown }, undefined] | [undefined, string];
+): LuaMultiReturn<[{ (this: void): unknown }, undefined] | [undefined, string]>;
 
-/** @tupleReturn */
 declare function loadfile(
     this: void,
     filename?: string,
     mode?: "b" | "t" | "bt",
     env?: unknown
-): [{ (this: void): unknown; }, undefined] | [undefined, string];
+): LuaMultiReturn<[{ (this: void): unknown }, undefined] | [undefined, string]>;
 
 export const luaAssert = _G.assert;
 export const luaError = _G.error;
@@ -59,34 +57,38 @@ export const luaRawLen = rawlen || function<T extends object>(v: T | string): nu
         }
         return len - 1;
     }
-}
+};
 
 export interface Env {
     [name: string]: unknown;
 }
 
-/** @tupleReturn */
-export function loadLuaString(str: string, env?: Env): [{ (this: void): unknown }, undefined] | [undefined, string] {
+export function loadLuaString(
+    str: string,
+    env?: Env
+): LuaMultiReturn<[{ (this: void): unknown }, undefined] | [undefined, string]> {
     if (setfenv) {
         const [f, e] = loadstring(str, str);
         if (f && env) {
             setfenv(f, env);
         }
-        return [f, e] as [{ (this: void): unknown }, undefined] | [undefined, string];
+        return $multi(f as { (this: void): unknown }, e as undefined);
 
     } else {
         return load(str, str, "t", env);
     }
 }
 
-/** @tupleReturn */
-export function loadLuaFile(filename: string, env?: Env): [{ (this: void): unknown }, undefined] | [undefined, string] {
+export function loadLuaFile(
+    filename: string,
+    env?: Env
+): LuaMultiReturn<[{ (this: void): unknown }, undefined] | [undefined, string]> {
     if (setfenv) {
         const [f, e] = loadfile(filename);
         if (f && env) {
             setfenv(f, env);
         }
-        return [f, e] as [{ (this: void): unknown }, undefined] | [undefined, string];
+        return $multi(f as { (this: void): unknown }, e as undefined);
 
     } else {
         return loadfile(filename, "t", env);
