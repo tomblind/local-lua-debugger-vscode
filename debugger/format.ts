@@ -49,8 +49,7 @@ export namespace Format {
     const escapesPattern = "[\n\r\"\\\b\f\t%z\x01-\x1F]";
 
     function replaceEscape(char: string) {
-        let [byte] = luaAssert(...string.byte(char));
-        byte = luaAssert(byte);
+        const [byte] = luaAssert(...string.byte(char));
         if (byte >= 0 && byte < 32) { //Control characters
             return string.format("\\u%.4X", byte);
         }

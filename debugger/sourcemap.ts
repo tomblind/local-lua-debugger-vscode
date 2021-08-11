@@ -156,7 +156,7 @@ export namespace SourceMap
                 if (nameList && nameOffset) {
                     nameIndex += nameOffset;
 
-                    const sourceName = nameList[nameIndex];
+                    const sourceName = luaAssert(nameList[nameIndex]);
 
                     if (!luaLines) {
                         luaLines = [];

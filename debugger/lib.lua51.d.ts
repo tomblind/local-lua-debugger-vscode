@@ -37,7 +37,7 @@ declare function assert<V>(this: void, v: V): Exclude<V, undefined | null | fals
 declare function assert<V extends unknown[]>(
     this: void,
     ...v: V
-): LuaMultiReturn<{ [I in keyof V]: I extends "0" ? Exclude<V[I], undefined | null | false> : V[I] }>;
+): LuaMultiReturn<V extends unknown ? ((...args: V) => void) extends ((a1: infer A, ...args: infer B) => void) ? [Exclude<A, undefined | null | false>, ...B] : never : never>;
 
 /**
  * This function is a generic interface to the garbage collector. It performs different functions according to its first
@@ -1663,7 +1663,7 @@ declare interface String {
      * For this function, a '`^`' at the start of a pattern does not work as an anchor, as this would prevent the
      *   iteration.
     */
-    gmatch(this: this, pattern: string): LuaIterable<LuaMultiReturn<string[]>>;
+    gmatch(this: this, pattern: string): LuaIterable<LuaMultiReturn<[string, ...string[]]>>;
 
     /**
      * Returns a copy of `s` in which all (or the first `n`, if given) occurrences of the `pattern` have been replaced
