@@ -219,8 +219,24 @@ declare function next<T extends object>(this: void, table: T, index?: keyof T): 
  *
  * See function `next` for the caveats of modifying the table during its traversal.
 */
-declare function pairs<K, V>(this: void, t: LuaTable<K, V>): LuaIterable<LuaMultiReturn<[K, Exclude<V, null | undefined>]>>;
-declare function pairs<T extends object>(this: void, t: T): LuaIterable<LuaMultiReturn<[keyof T, Exclude<T[keyof T], null | undefined>]>>;
+declare function pairs<K, V>(
+    this: void,
+    t: LuaTable<K, V>
+): LuaIterable<LuaMultiReturn<[K, Exclude<V, null | undefined>]>>;
+
+/**
+ * Returns three values: the `next` function, the table `t`, and nil, so that the construction
+ *
+ *      for k,v in pairs(t) do body end
+ *
+ * will iterate over all key-value pairs of table `t`.
+ *
+ * See function `next` for the caveats of modifying the table during its traversal.
+*/
+declare function pairs<T extends object>(
+    this: void,
+    t: T
+): LuaIterable<LuaMultiReturn<[keyof T, Exclude<T[keyof T], null | undefined>]>>;
 
 /**
  * Calls function `f` with the given arguments in protected mode. This means that any error inside `f` is not
@@ -681,7 +697,7 @@ declare namespace string {
      * For this function, a '`^`' at the start of a pattern does not work as an anchor, as this would prevent the
      *   iteration.
     */
-    export function gmatch(this: void, s: string, pattern: string): LuaIterable<LuaMultiReturn<string[]>>;
+    export function gmatch(this: void, s: string, pattern: string): LuaIterable<LuaMultiReturn<[string, ...string[]]>>;
 
     /**
      * Returns a copy of `s` in which all (or the first `n`, if given) occurrences of the `pattern` have been replaced
@@ -706,21 +722,21 @@ declare namespace string {
      *
      *      x = string.gsub("hello world", "(%w+)", "%1 %1")
      *      -->; x="hello hello world world"
-     *
+     *      
      *      x = string.gsub("hello world", "%w+", "%0 %0", 1)
      *      -->; x="hello hello world"
-     *
+     *      
      *      x = string.gsub("hello world from Lua", "(%w+)%s*(%w+)", "%2 %1")
      *      -->; x="world hello Lua from"
-     *
+     *      
      *      x = string.gsub("home = $HOME, user = $USER", "%$(%w+)", os.getenv)
      *      -->; x="home = /home/roberto, user = roberto"
-     *
+     *      
      *      x = string.gsub("4+5 = $return 4+5$", "%$(.-)%$", function (s)
      *            return loadstring(s)()
      *          end)
      *      -->; x="4+5 = 9"
-     *
+     *      
      *      local t = {name="lua", version="5.1"}
      *      x = string.gsub("$name-$version.tar.gz", "%$(%w+)", t)
      *      -->; x="lua-5.1.tar.gz"
@@ -1057,9 +1073,9 @@ declare namespace io {
     export function popen(this: void, prog: string, mode?: "r" | "w"): LuaMultiReturn<[LuaFile] | [undefined, string]>;
 
     export type FileReadFormat = "*n" | "*a" | "*l" | number;
-
+    
     export type FileReadFormatType<F extends FileReadFormat> = F extends "*n" ? number : string;
-
+    
     export type FileReadFormatTypeTuple<A extends FileReadFormat[]> = {
         [I in keyof A]: A[I] extends "*n" ? number : string
     };
@@ -1217,7 +1233,7 @@ declare namespace os {
         sec?: number;
         isdst?: boolean;
     }
-
+    
     export interface Date extends Time {
         hour: number;
         min: number;
@@ -1688,21 +1704,21 @@ declare interface String {
      *
      *      x = string.gsub("hello world", "(%w+)", "%1 %1")
      *      -->; x="hello hello world world"
-     *
+     *      
      *      x = string.gsub("hello world", "%w+", "%0 %0", 1)
      *      -->; x="hello hello world"
-     *
+     *      
      *      x = string.gsub("hello world from Lua", "(%w+)%s*(%w+)", "%2 %1")
      *      -->; x="world hello Lua from"
-     *
+     *      
      *      x = string.gsub("home = $HOME, user = $USER", "%$(%w+)", os.getenv)
      *      -->; x="home = /home/roberto, user = roberto"
-     *
+     *      
      *      x = string.gsub("4+5 = $return 4+5$", "%$(.-)%$", function (s)
      *            return loadstring(s)()
      *          end)
      *      -->; x="4+5 = 9"
-     *
+     *      
      *      local t = {name="lua", version="5.1"}
      *      x = string.gsub("$name-$version.tar.gz", "%$(%w+)", t)
      *      -->; x="lua-5.1.tar.gz"
