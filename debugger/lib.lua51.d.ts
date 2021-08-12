@@ -244,12 +244,37 @@ declare function pairs<T extends object>(
  *   boolean), which is true if the call succeeds without errors. In such case, `pcall` also returns all results from
  *   the call, after this first result. In case of any error, `pcall` returns false plus the error message.
 */
+declare function pcall<T, A extends unknown[], R extends unknown[]>(
+    this: void,
+    f: { (this: T, ...args: A): LuaMultiReturn<R>; },
+    self: T,
+    ...args: A
+): LuaMultiReturn<[true, ...R] | [false, string]>;
+
+/**
+ * Calls function `f` with the given arguments in protected mode. This means that any error inside `f` is not
+ *   propagated; instead, `pcall` catches the error and returns a status code. Its first result is the status code (a
+ *   boolean), which is true if the call succeeds without errors. In such case, `pcall` also returns all results from
+ *   the call, after this first result. In case of any error, `pcall` returns false plus the error message.
+*/
 declare function pcall<T, A extends unknown[], R>(
     this: void,
     f: { (this: T, ...args: A): R; },
     self: T,
     ...args: A
 ): LuaMultiReturn<[true, R] | [false, string]>;
+
+/**
+ * Calls function `f` with the given arguments in protected mode. This means that any error inside `f` is not
+ *   propagated; instead, `pcall` catches the error and returns a status code. Its first result is the status code (a
+ *   boolean), which is true if the call succeeds without errors. In such case, `pcall` also returns all results from
+ *   the call, after this first result. In case of any error, `pcall` returns false plus the error message.
+*/
+declare function pcall<A extends unknown[], R extends unknown[]>(
+    this: void,
+    f: { (this: void, ...args: A): LuaMultiReturn<R>; },
+    ...args: A
+): LuaMultiReturn<[true, ...R] | [false, string]>;
 
 /**
  * Calls function `f` with the given arguments in protected mode. This means that any error inside `f` is not
@@ -410,6 +435,21 @@ declare function unpack<T>(this: void, list: T[], i: number, j?: number): LuaMul
  *   contents of this variable is "`Lua 5.1`".
 */
 declare const _VERSION: "Lua 5.1";
+
+/**
+ * This function is similar to `pcall`, except that you can set a new error handler.
+ *
+ * `xpcall` calls function `f` in protected mode, using `err` as the error handler. Any error inside `f` is not
+ *   propagated; instead, `xpcall` catches the error, calls the `err` function with the original error object, and
+ *   returns a status code. Its first result is the status code (a boolean), which is true if the call succeeds without
+ *   errors. In this case, `xpcall` also returns all results from the call, after this first result. In case of any
+ *   error, `xpcall` returns false plus the result from `err`.
+*/
+declare function xpcall<R extends unknown[]>(
+    this: void,
+    f: { (this: void): LuaMultiReturn<R>; },
+    err: { (this: void, msg: string): void; }
+): LuaMultiReturn<[true, ...R] | [false, string]>;
 
 /**
  * This function is similar to `pcall`, except that you can set a new error handler.
