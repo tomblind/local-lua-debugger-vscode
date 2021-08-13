@@ -37,8 +37,7 @@ export interface SourceMap {
     hasMappedNames: boolean;
 }
 
-export namespace SourceMap
-{
+export namespace SourceMap {
     const cache: { [file: string]: SourceMap | false | undefined } = {};
 
     const base64Lookup: { [char: string]: number } = {
@@ -148,10 +147,10 @@ export namespace SourceMap
                 const [colOffset, sourceOffset, sourceLineOffset, sourceColOffset, nameOffset]
                     = decodeBase64VLQ(mapping);
 
-                column += (colOffset || 0);
-                sourceIndex += (sourceOffset || 0);
-                sourceLine += (sourceLineOffset || 0);
-                sourceColumn += (sourceColOffset || 0);
+                column += (colOffset ?? 0);
+                sourceIndex += (sourceOffset ?? 0);
+                sourceLine += (sourceLineOffset ?? 0);
+                sourceColumn += (sourceColOffset ?? 0);
 
                 if (nameList && nameOffset) {
                     nameIndex += nameOffset;
@@ -224,7 +223,7 @@ export namespace SourceMap
             return build(map, fileDir, data);
         }
 
-        const [mapFile] = io.open(filePath + ".map");
+        const [mapFile] = io.open(`${filePath}.map`);
         if (mapFile) {
             const map = mapFile.read("*a");
             mapFile.close();
@@ -255,10 +254,10 @@ export namespace SourceMap
         let sourceMap = cache[fileName];
 
         if (sourceMap === undefined) {
-            sourceMap = findMap(fileName) || false;
+            sourceMap = findMap(fileName) ?? false;
             cache[fileName] = sourceMap;
         }
 
-        return sourceMap || undefined;
+        return sourceMap !== false ? sourceMap : undefined;
     }
 }

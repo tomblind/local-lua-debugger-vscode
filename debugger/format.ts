@@ -23,13 +23,14 @@
 import {luaRawLen, luaAssert} from "./luafuncs";
 
 export namespace Format {
+    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
     export const arrayTag = {} as "$arrayTag";
 
     export interface ExplicitArray {
         [arrayTag]?: boolean;
     }
 
-    export function makeExplicitArray<T = unknown>(arr: T[] = []) {
+    export function makeExplicitArray<T = unknown>(arr: T[] = []): T[] {
         (arr as ExplicitArray)[arrayTag] = true;
         return arr;
     }
@@ -37,13 +38,13 @@ export namespace Format {
     const indentStr = "  ";
 
     const escapes: Record<string, string> = {
-        ["\n"]: "\\n",
-        ["\r"]: "\\r",
-        ["\""]: "\\\"",
-        ["\\"]: "\\\\",
-        ["\b"]: "\\b",
-        ["\f"]: "\\f",
-        ["\t"]: "\\t",
+        "\n": "\\n",
+        "\r": "\\r",
+        "\"": "\\\"",
+        "\\": "\\\\",
+        "\b": "\\b",
+        "\f": "\\f",
+        "\t": "\\t",
     };
 
     const escapesPattern = "[\n\r\"\\\b\f\t%z\x01-\x1F]";
@@ -61,7 +62,7 @@ export namespace Format {
         return escaped;
     }
 
-    function isArray(val: object) {
+    function isArray(val: AnyTable): val is AnyNotNil[] {
         if ((val as ExplicitArray)[arrayTag]) {
             return true;
         }
@@ -79,16 +80,16 @@ export namespace Format {
         return true;
     }
 
-    export function asJson(val: {}, indent = 0, tables?: LuaTable<{}, boolean>) {
-        tables = tables || new LuaTable();
+    export function asJson(val: AnyNotNil, indent = 0, tables?: LuaTable<AnyNotNil, boolean>): string {
+        tables = tables ?? new LuaTable();
 
         const valType = type(val);
         if (valType === "table" && !tables.get(val)) {
             tables.set(val, true);
 
-            if (isArray(val as object)) {
+            if (isArray(val)) {
                 const arrayVals: string[] = [];
-                for (const [_, arrayVal] of ipairs(val as {}[])) {
+                for (const [_, arrayVal] of ipairs(val)) {
                     const valStr = asJson(arrayVal, indent + 1, tables);
                     table.insert(arrayVals, `\n${indentStr.rep(indent + 1)}${valStr}`);
                 }
@@ -96,7 +97,7 @@ export namespace Format {
 
             } else {
                 const kvps: string[] = [];
-                for (const [k, v] of pairs(val as object)) {
+                for (const [k, v] of pairs(val as AnyTable)) {
                     const valStr = asJson(v, indent + 1, tables);
                     table.insert(kvps, `\n${indentStr.rep(indent + 1)}"${escape(tostring(k))}": ${valStr}`);
                 }

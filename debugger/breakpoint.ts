@@ -39,11 +39,11 @@ export namespace Breakpoint {
         return current;
     }
 
-    export function add(file: string, line: number, condition?: string) {
+    export function add(file: string, line: number, condition?: string): void {
         table.insert(current, {file: Path.format(file), line, enabled: true, condition});
     }
 
-    export function remove(file: string, line: number) {
+    export function remove(file: string, line: number): void {
         file = Path.format(file);
         for (const [i, breakpoint] of ipairs(current)) {
             if (breakpoint.file === file && breakpoint.line === line) {
@@ -53,7 +53,7 @@ export namespace Breakpoint {
         }
     }
 
-    export function clear() {
+    export function clear(): void {
         current = [];
     }
 }

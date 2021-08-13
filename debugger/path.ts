@@ -24,7 +24,7 @@ import {luaAssert} from "./luafuncs";
 
 export namespace Path {
     export const separator = (() => {
-        const config = (_G.package as typeof _G["package"] & Record<"config", string>).config;
+        const config = (_G.package as typeof _G["package"] & Record<"config", string | undefined>).config;
         if (config) {
             const [sep] = config.match("^[^\n]+");
             if (sep) {
@@ -36,35 +36,35 @@ export namespace Path {
 
     let cwd: string | undefined;
 
-    export function getCwd() {
+    export function getCwd(): string {
         if (!cwd) {
-            const [p] = io.popen(separator === "\\" && "cd" || "pwd");
+            const [p] = io.popen(separator === "\\" ? "cd" : "pwd");
             if (p) {
                 [cwd] = p.read("*a").match("^%s*(.-)%s*$");
             }
-            cwd = cwd || "";
+            cwd = cwd ?? "";
         }
         return cwd;
     }
 
-    export function dirName(path: string) {
+    export function dirName(path: string): string {
         const [dir] = path.match(`^(.-)${separator}+[^${separator}]+$`);
-        return dir || ".";
+        return dir ?? ".";
     }
 
-    export function splitDrive(path: string) {
-        let [drive, pathPart] = path.match(`^[@=]?([a-zA-Z]:)[\\/](.*)`);
+    export function splitDrive(path: string): LuaMultiReturn<[string, string]> {
+        let [drive, pathPart] = path.match("^[@=]?([a-zA-Z]:)[\\/](.*)");
         if (drive) {
             drive = drive.upper() + separator;
         } else {
-            [drive, pathPart] = path.match(`^[@=]?([\\/]*)(.*)`);
+            [drive, pathPart] = path.match("^[@=]?([\\/]*)(.*)");
         }
         return $multi(luaAssert(drive), luaAssert(pathPart));
     }
 
     const formattedPathCache: Record<string, string> = {};
 
-    export function format(path: string) {
+    export function format(path: string): string {
         let formattedPath = formattedPathCache[path];
         if (!formattedPath) {
             const [drive, pathOnly] = splitDrive(path);
@@ -84,12 +84,12 @@ export namespace Path {
         return formattedPath;
     }
 
-    export function isAbsolute(path: string) {
+    export function isAbsolute(path: string): boolean {
         const [drive] = splitDrive(path);
         return drive.length > 0;
     }
 
-    export function getAbsolute(path: string) {
+    export function getAbsolute(path: string): string {
         if (isAbsolute(path)) {
             return format(path);
         }

@@ -71,7 +71,7 @@ export namespace Debugger {
     }
     const hookStack: HookType[] = [];
 
-    const threadIds = setmetatable(new LuaTable<Thread, number>(), {__mode: "k"});
+    const threadIds = setmetatable(new LuaTable<Thread, number | undefined>(), {__mode: "k"});
     const mainThreadId = 1;
     threadIds.set(mainThread, mainThreadId);
     let nextThreadId = mainThreadId + 1;
@@ -166,7 +166,7 @@ export namespace Debugger {
             [name] = name.gsub("[^a-zA-Z0-9_]+", "_");
             let key = `${name}_${-index}`;
             while (locs[key]) {
-                key = key + "_";
+                key = `${key}_`;
             }
             locs[key] = {val, index, type: type(val)};
 
@@ -191,7 +191,11 @@ export namespace Debugger {
         return ups;
     }
 
-    function populateGlobals(globs: Vars, tbl: Record<string, unknown>, metaStack: LuaTable<{}, boolean>) {
+    function populateGlobals(
+        globs: Vars,
+        tbl: Record<string, unknown>,
+        metaStack: LuaTable<AnyNotNil, boolean | undefined>
+    ) {
         metaStack.set(tbl, true);
 
         const meta = getmetatable(tbl) as Record<string, unknown> | undefined;
@@ -207,8 +211,8 @@ export namespace Debugger {
 
     function getGlobals(level: number, thread: Thread): Vars {
         const globs: Vars = {};
-        const fenv = luaGetEnv(level, isThread(thread) && thread || undefined) || _G;
-        const metaStack = new LuaTable<{}, boolean>();
+        const fenv = luaGetEnv(level, isThread(thread) ? thread : undefined) ?? _G;
+        const metaStack = new LuaTable<AnyNotNil, boolean | undefined>();
         populateGlobals(globs, fenv, metaStack);
         return globs;
     }
@@ -249,7 +253,7 @@ export namespace Debugger {
                     return `.${sourceName}`;
                 }
             } else {
-                return luaAssert(sourceMap).luaNames[sourceName] || sourceName;
+                return luaAssert(sourceMap).luaNames[sourceName] ?? sourceName;
             }
         }
 
@@ -284,7 +288,7 @@ export namespace Debugger {
                     const lastChar = expression.sub(i - 1, i - 1);
                     nameIsProperty = (lastChar === ".");
                     nameStart = i;
-                    mappedExpression += expression.sub(nonNameStart, nameStart - (nameIsProperty && 2 || 1));
+                    mappedExpression += expression.sub(nonNameStart, nameStart - (nameIsProperty ? 2 : 1));
                 }
             }
         }
@@ -310,15 +314,15 @@ export namespace Debugger {
             return $multi(false, "unable to access main thread while running in a coroutine");
         }
 
-        const level = (thread === (activeThread || mainThread)) && (frame + frameOffset + 1) || frame;
+        const level = (thread === (activeThread ?? mainThread)) ? (frame + frameOffset + 1) : frame;
         const locs = getLocals(level + 1, thread);
         const ups = getUpvalues(info);
-        const fenv = luaGetEnv(level, isThread(thread) && thread || undefined) || _G;
+        const fenv = luaGetEnv(level, isThread(thread) ? thread : undefined) ?? _G;
         const env = setmetatable(
             {},
             {
                 __index(this: unknown, name: string) {
-                    const variable = locs[name] || ups[name];
+                    const variable = locs[name] ?? ups[name];
                     if (variable !== undefined) {
                         return variable.val;
                     } else {
@@ -326,7 +330,7 @@ export namespace Debugger {
                     }
                 },
                 __newindex(this: unknown, name: string, val: unknown) {
-                    const variable = locs[name] || ups[name];
+                    const variable = locs[name] ?? ups[name];
                     if (variable !== undefined) {
                         variable.type = type(val);
                         variable.val = val;
@@ -358,7 +362,7 @@ export namespace Debugger {
         return $multi(success as true, result);
     }
 
-    function getInput() {
+    function getInput(): string | undefined {
         if (prompt.length > 0) {
             io.write(prompt);
         }
@@ -376,7 +380,7 @@ export namespace Debugger {
         }
         const stack: debug.FunctionInfo[] = [];
         while (true) {
-            let stackInfo: debug.FunctionInfo;
+            let stackInfo: debug.FunctionInfo | undefined;
             if (thread) {
                 stackInfo = debug.getinfo(thread, i, "nSluf");
             } else {
@@ -518,7 +522,7 @@ export namespace Debugger {
                 const [newFrameStr] = inp.match("^frame%s+(%d+)$");
                 if (newFrameStr !== undefined) {
                     const newFrame = luaAssert(tonumber(newFrameStr));
-                    if (newFrame !== undefined && newFrame > 0 && newFrame <= currentStack.length) {
+                    if (newFrame > 0 && newFrame <= currentStack.length) {
                         frame = newFrame - 1;
                         info = luaAssert(currentStack[frame]);
                         source = Path.format(luaAssert(info.source));
@@ -618,7 +622,7 @@ export namespace Debugger {
 
                 } else {
                     const mappedExpression = mapExpressionNames(expression, sourceMap);
-                    const [s, r] = execute("return " + mappedExpression, currentThread, frame, frameOffset, info);
+                    const [s, r] = execute(`return ${mappedExpression}`, currentThread, frame, frameOffset, info);
                     if (s) {
                         Send.result(r);
                     } else {
@@ -636,10 +640,10 @@ export namespace Debugger {
 
                 } else {
                     const mappedExpression = mapExpressionNames(expression, sourceMap);
-                    const [s, r] = execute("return " + mappedExpression, currentThread, frame, frameOffset, info);
+                    const [s, r] = execute(`return ${mappedExpression}`, currentThread, frame, frameOffset, info);
                     if (s) {
-                        if (typeof r === "object") {
-                            Send.props(r as object, kind, tonumber(first), tonumber(count));
+                        if (type(r) === "table") {
+                            Send.props(r as AnyTable, kind, tonumber(first), tonumber(count));
                         } else {
                             Send.error(`Expression "${mappedExpression}" is not a table`);
                         }
@@ -712,12 +716,12 @@ export namespace Debugger {
             return;
         }
 
-        const activeThread = coroutine.running() || mainThread;
+        const activeThread = coroutine.running() ?? mainThread;
 
         //Stepping
         if (breakAtDepth >= 0) {
             let stepBreak: boolean;
-            if (!breakInThread) {
+            if (breakInThread === undefined) {
                 stepBreak = true;
             } else if (activeThread === breakInThread) {
                 stepBreak = getStack(stackOffset).length <= breakAtDepth;
@@ -744,7 +748,7 @@ export namespace Debugger {
             if (breakpoint.enabled && checkBreakpoint(breakpoint, source, topFrame.currentline, sourceMap)) {
                 if (breakpoint.condition) {
                     const mappedCondition = mapExpressionNames(breakpoint.condition, sourceMap);
-                    const condition = "return " + mappedCondition;
+                    const condition = `return ${mappedCondition}`;
                     const [success, result] = execute(condition, activeThread, 0, stackOffset, topFrame);
                     if (success && result) {
                         const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
@@ -794,13 +798,13 @@ export namespace Debugger {
     function breakForError(err: unknown, level?: number, propagate?: false): void;
     function breakForError(err: unknown, level?: number, propagate?: boolean) {
         const message = mapSources(tostring(err));
-        level = (level || 1) + 1;
+        level = (level ?? 1) + 1;
 
         if (skipNextBreak) {
             skipNextBreak = false;
 
         } else {
-            const thread = coroutine.running() || mainThread;
+            const thread = coroutine.running() ?? mainThread;
             Send.debugBreak(message, "error", getThreadId(thread));
             debugBreak(thread, level);
         }
@@ -837,6 +841,7 @@ export namespace Debugger {
         return canYieldAcrossPcall;
     }
 
+    // eslint-disable-next-line @typescript-eslint/ban-types
     function debuggerCoroutineCreate(f: Function, allowBreak: boolean) {
         if (allowBreak && useXpcallInCoroutine()) {
             const originalFunc = f as DebuggableFunction;
@@ -872,6 +877,7 @@ export namespace Debugger {
     }
 
     //coroutine.wrap replacement for hooking threads
+    // eslint-disable-next-line @typescript-eslint/ban-types
     function debuggerCoroutineWrap(f: Function) {
         const thread = debuggerCoroutineCreate(f, true);
         function resumer(...args: unknown[]) {
@@ -892,25 +898,23 @@ export namespace Debugger {
     ): string {
         let trace: string;
         if (isThread(threadOrMessage)) {
-            trace = luaDebugTraceback(threadOrMessage, (messageOrLevel as string) || "", (level || 1) + 1);
+            trace = luaDebugTraceback(threadOrMessage, (messageOrLevel as string | undefined) ?? "", (level ?? 1) + 1);
         } else {
-            trace = luaDebugTraceback(threadOrMessage || "", ((messageOrLevel as number) || 1) + 1);
+            trace = luaDebugTraceback(threadOrMessage ?? "", ((messageOrLevel as number | undefined) ?? 1) + 1);
         }
-        if (trace) {
-            trace = mapSources(trace);
-        }
+        trace = mapSources(trace);
 
         if (skipNextBreak) {
             skipNextBreak = false;
 
         //Break if debugging globally and traceback was not called manually from scripts
-        } else if (
-            hookStack[hookStack.length - 1] === HookType.Global
-            && debug.getinfo(2, "S").what === "C"
-        ) {
-            const thread = isThread(threadOrMessage) && threadOrMessage || coroutine.running() || mainThread;
-            Send.debugBreak(trace || "error", "error", getThreadId(thread));
-            debugBreak(thread, 3);
+        } else if (hookStack[hookStack.length - 1] === HookType.Global) {
+            const info = debug.getinfo(2, "S");
+            if (info && info.what === "C") {
+                const thread = isThread(threadOrMessage) ? threadOrMessage : coroutine.running() ?? mainThread;
+                Send.debugBreak(trace, "error", getThreadId(thread));
+                debugBreak(thread, 3);
+            }
         }
 
         return trace;
@@ -918,7 +922,7 @@ export namespace Debugger {
 
     //error replacement for catching errors
     function debuggerError(message: string, level?: number) {
-        return breakForError(message, (level || 0) + 1, true);
+        return breakForError(message, (level ?? 0) + 1, true);
     }
 
     function debuggerAssert(v: unknown, ...args: unknown[]) {
@@ -942,7 +946,7 @@ export namespace Debugger {
         }
     }
 
-    export function clearHook() {
+    export function clearHook(): void {
         while (hookStack.length > 0) {
             table.remove(hookStack);
         }
@@ -965,7 +969,7 @@ export namespace Debugger {
     const breakInCoroutinesEnv: LuaDebug.BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
     const breakInCoroutines = os.getenv(breakInCoroutinesEnv) === "1";
 
-    export function pushHook(hookType: HookType) {
+    export function pushHook(hookType: HookType): void {
         table.insert(hookStack, hookType);
 
         setErrorHandler();
@@ -974,6 +978,7 @@ export namespace Debugger {
             return;
         }
 
+        // eslint-disable-next-line @typescript-eslint/ban-types
         coroutine.create = (f: Function) => debuggerCoroutineCreate(f, breakInCoroutines);
         coroutine.wrap = debuggerCoroutineWrap;
         coroutine.resume = breakInCoroutines ? debuggerCoroutineResume : luaCoroutineResume;
@@ -992,7 +997,7 @@ export namespace Debugger {
         }
     }
 
-    export function popHook() {
+    export function popHook(): void {
         table.remove(hookStack);
         if (hookStack.length === 0) {
             clearHook();
@@ -1001,27 +1006,31 @@ export namespace Debugger {
         }
     }
 
-    export function triggerBreak() {
+    export function triggerBreak(): void {
         breakAtDepth = math.huge;
     }
 
-    export function debugGlobal(breakImmediately?: boolean) {
-        Debugger.pushHook(HookType.Global);
+    export function debugGlobal(breakImmediately?: boolean): void {
+        pushHook(HookType.Global);
 
         if (breakImmediately) {
-            Debugger.triggerBreak();
+            triggerBreak();
         }
     }
 
-    export function debugFunction(func: DebuggableFunction, breakImmediately: boolean | undefined, args: unknown[]) {
-        Debugger.pushHook(HookType.Function);
+    export function debugFunction(
+        func: DebuggableFunction,
+        breakImmediately: boolean | undefined,
+        args: unknown[]
+    ): LuaMultiReturn<unknown[]> {
+        pushHook(HookType.Function);
 
         if (breakImmediately) {
-            Debugger.triggerBreak();
+            triggerBreak();
         }
 
         const results = xpcall(() => func(...args), breakForError);
-        Debugger.popHook();
+        popHook();
         if (results[0]) {
             return luaUnpack(results, 2);
         } else {

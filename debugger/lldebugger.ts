@@ -25,30 +25,30 @@ import {Debugger} from "./debugger";
 
 //Set global reference by directly accessing self from TSTL exports variable
 declare const ____exports: unknown;
-_G.lldebugger = _G.lldebugger || ____exports;
+_G.lldebugger = _G.lldebugger ?? ____exports;
 
 //Don't buffer io
 io.stdout.setvbuf("no");
 io.stderr.setvbuf("no");
 
 //Start debugger globally
-export function start(breakImmediately?: boolean) {
-    breakImmediately = breakImmediately || os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") === "1";
+export function start(breakImmediately?: boolean): void {
+    breakImmediately ||= os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") === "1";
     Debugger.debugGlobal(breakImmediately);
 }
 
 //Stop debugging currently debugged function
-export function finish() {
+export function finish(): void {
     Debugger.popHook();
 }
 
 //Stop debugger completely
-export function stop() {
+export function stop(): void {
     Debugger.clearHook();
 }
 
 //Load and debug the specified file
-export function runFile(filePath: unknown, breakImmediately?: boolean, arg?: object) {
+export function runFile(filePath: unknown, breakImmediately?: boolean, arg?: unknown[]): LuaMultiReturn<unknown[]> {
     if (typeof filePath !== "string") {
         throw `expected string as first argument to runFile, but got '${type(filePath)}'`;
     }
@@ -57,11 +57,11 @@ export function runFile(filePath: unknown, breakImmediately?: boolean, arg?: obj
     }
     const env = setmetatable({arg}, {__index: _G});
     const [func] = luaAssert(...loadLuaFile(filePath, env));
-    return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, arg as unknown[]);
+    return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, arg ?? []);
 }
 
 //Call and debug the specified function
-export function call(func: unknown, breakImmediately?: boolean, ...args: unknown[]) {
+export function call(func: unknown, breakImmediately?: boolean, ...args: unknown[]): LuaMultiReturn<unknown[]> {
     if (typeof func !== "function") {
         throw `expected string as first argument to debugFile, but got '${type(func)}'`;
     }
@@ -72,6 +72,6 @@ export function call(func: unknown, breakImmediately?: boolean, ...args: unknown
 }
 
 //Trigger a break at next executed line
-export function requestBreak() {
+export function requestBreak(): void {
     Debugger.triggerBreak();
 }

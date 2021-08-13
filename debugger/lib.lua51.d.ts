@@ -762,21 +762,21 @@ declare namespace string {
      *
      *      x = string.gsub("hello world", "(%w+)", "%1 %1")
      *      -->; x="hello hello world world"
-     *      
+     *
      *      x = string.gsub("hello world", "%w+", "%0 %0", 1)
      *      -->; x="hello hello world"
-     *      
+     *
      *      x = string.gsub("hello world from Lua", "(%w+)%s*(%w+)", "%2 %1")
      *      -->; x="world hello Lua from"
-     *      
+     *
      *      x = string.gsub("home = $HOME, user = $USER", "%$(%w+)", os.getenv)
      *      -->; x="home = /home/roberto, user = roberto"
-     *      
+     *
      *      x = string.gsub("4+5 = $return 4+5$", "%$(.-)%$", function (s)
      *            return loadstring(s)()
      *          end)
      *      -->; x="4+5 = 9"
-     *      
+     *
      *      local t = {name="lua", version="5.1"}
      *      x = string.gsub("$name-$version.tar.gz", "%$(%w+)", t)
      *      -->; x="lua-5.1.tar.gz"
@@ -1113,9 +1113,9 @@ declare namespace io {
     export function popen(this: void, prog: string, mode?: "r" | "w"): LuaMultiReturn<[LuaFile] | [undefined, string]>;
 
     export type FileReadFormat = "*n" | "*a" | "*l" | number;
-    
+
     export type FileReadFormatType<F extends FileReadFormat> = F extends "*n" ? number : string;
-    
+
     export type FileReadFormatTypeTuple<A extends FileReadFormat[]> = {
         [I in keyof A]: A[I] extends "*n" ? number : string
     };
@@ -1273,7 +1273,7 @@ declare namespace os {
         sec?: number;
         isdst?: boolean;
     }
-    
+
     export interface Date extends Time {
         hour: number;
         min: number;
@@ -1342,7 +1342,7 @@ declare namespace os {
     /**
      * Returns the value of the process environment variable `varname`, or nil if the variable is not defined.
     */
-    export function getenv(this: void, varname: string): string;
+    export function getenv(this: void, varname: string): string | undefined;
 
     /**
      * Deletes the file or directory with the given name. Directories must be empty to be removed. If this function
@@ -1455,7 +1455,7 @@ declare namespace debug {
      *   a reasonable name can be found, and the expression `debug.getinfo(print)` returns a table with all available
      *   information about the `print` function.
     */
-    export function getinfo(this: void, function_: Function | number, what?: string): FunctionInfo;
+    export function getinfo(this: void, function_: Function | number, what?: string): FunctionInfo | undefined;
 
     /**
      * Returns a table with information about a function. You can give the function directly, or you can give a number
@@ -1472,7 +1472,7 @@ declare namespace debug {
      *   a reasonable name can be found, and the expression `debug.getinfo(print)` returns a table with all available
      *   information about the `print` function.
     */
-    export function getinfo(this: void, thread: LuaThread, function_: Function | number, what?: string): FunctionInfo;
+    export function getinfo(this: void, thread: LuaThread, function_: Function | number, what?: string): FunctionInfo | undefined;
 
     /**
      * This function returns the name and the value of the local variable with index `local` of the function at level
@@ -1744,21 +1744,21 @@ declare interface String {
      *
      *      x = string.gsub("hello world", "(%w+)", "%1 %1")
      *      -->; x="hello hello world world"
-     *      
+     *
      *      x = string.gsub("hello world", "%w+", "%0 %0", 1)
      *      -->; x="hello hello world"
-     *      
+     *
      *      x = string.gsub("hello world from Lua", "(%w+)%s*(%w+)", "%2 %1")
      *      -->; x="world hello Lua from"
-     *      
+     *
      *      x = string.gsub("home = $HOME, user = $USER", "%$(%w+)", os.getenv)
      *      -->; x="home = /home/roberto, user = roberto"
-     *      
+     *
      *      x = string.gsub("4+5 = $return 4+5$", "%$(.-)%$", function (s)
      *            return loadstring(s)()
      *          end)
      *      -->; x="4+5 = 9"
-     *      
+     *
      *      local t = {name="lua", version="5.1"}
      *      x = string.gsub("$name-$version.tar.gz", "%$(%w+)", t)
      *      -->; x="lua-5.1.tar.gz"

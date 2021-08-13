@@ -22,7 +22,7 @@
 
 import {luaRawLen} from "./luafuncs";
 import {Format} from "./format";
-import {Locals, Vars} from "./debugger";
+import {Vars} from "./debugger";
 import {Thread, mainThread, mainThreadName} from "./thread";
 
 export namespace Send {
@@ -40,7 +40,7 @@ export namespace Send {
         }
     }
 
-    function isElementKey(tbl: object, tblLen: number, key: unknown) {
+    function isElementKey(tbl: AnyTable, tblLen: number, key: unknown) {
         return typeof key === "number" && key >= 1 && key <= tblLen;
     }
 
@@ -52,7 +52,7 @@ export namespace Send {
         };
 
         if (typeof value === "object") {
-            dbgVar.length = luaRawLen(value as object);
+            dbgVar.length = luaRawLen(value as AnyTable);
         }
 
         return dbgVar;
@@ -62,28 +62,28 @@ export namespace Send {
         io.write(Format.asJson(message));
     }
 
-    export function error(err: string) {
+    export function error(err: string): void {
         const dbgError: LuaDebug.Error = {tag: "$luaDebug", type: "error", error: err};
         send(dbgError);
     }
 
-    export function debugBreak(message: string, breakType: LuaDebug.DebugBreak["breakType"], threadId: number) {
+    export function debugBreak(message: string, breakType: LuaDebug.DebugBreak["breakType"], threadId: number): void {
         const dbgBreak: LuaDebug.DebugBreak = {tag: "$luaDebug", type: "debugBreak", message, breakType, threadId};
         send(dbgBreak);
     }
 
-    export function result(value: unknown) {
+    export function result(value: unknown): void {
         const dbgVal: LuaDebug.Value = {type: type(value), value: getPrintableValue(value)};
         const dbgResult: LuaDebug.Result = {tag: "$luaDebug", type: "result", result: dbgVal};
         send(dbgResult);
     }
 
-    export function frames(frameList: LuaDebug.Frame[]) {
+    export function frames(frameList: LuaDebug.Frame[]): void {
         const dbgStack: LuaDebug.Stack = {tag: "$luaDebug", type: "stack", frames: frameList};
         send(dbgStack);
     }
 
-    export function threads(threadIds: LuaTable<Thread, number>, activeThread: Thread) {
+    export function threads(threadIds: LuaTable<Thread, number | undefined>, activeThread: Thread): void {
         const dbgThreads: LuaDebug.Threads = {
             tag: "$luaDebug",
             type: "threads",
@@ -92,7 +92,7 @@ export namespace Send {
         for (const [thread, threadId] of pairs(threadIds)) {
             if (thread === mainThread || coroutine.status(thread as LuaThread) !== "dead") {
                 const dbgThread: LuaDebug.Thread = {
-                    name: thread === mainThread && mainThreadName || tostring(thread),
+                    name: thread === mainThread ? mainThreadName : tostring(thread),
                     id: threadId,
                     active: thread === activeThread || undefined
                 };
@@ -102,7 +102,7 @@ export namespace Send {
         send(dbgThreads);
     }
 
-    export function vars(varsObj: Vars) {
+    export function vars(varsObj: Vars): void {
         const dbgVariables: LuaDebug.Variables = {
             tag: "$luaDebug",
             type: "variables",
@@ -115,15 +115,15 @@ export namespace Send {
         send(dbgVariables);
     }
 
-    export function props(tbl: object, kind?: string, first?: number, count?: number) {
+    export function props(tbl: AnyTable, kind?: string, first?: number, count?: number): void {
         const dbgProperties: LuaDebug.Properties = {
             tag: "$luaDebug",
             type: "properties",
             properties: Format.makeExplicitArray()
         };
         if (kind === "indexed") {
-            first = first || 1;
-            const last = count && (first + count - 1) || (first + luaRawLen(tbl) - 1);
+            first ??= 1;
+            const last = count ? (first + count - 1) : (first + luaRawLen(tbl) - 1);
             for (const i of $range(first, last)) {
                 const val = (tbl as Record<string, unknown>)[i];
                 const name = getPrintableValue(i);
@@ -151,7 +151,7 @@ export namespace Send {
         send(dbgProperties);
     }
 
-    export function breakpoints(breaks: LuaDebug.Breakpoint[]) {
+    export function breakpoints(breaks: LuaDebug.Breakpoint[]): void {
         const dbgBreakpoints: LuaDebug.Breakpoints = {
             tag: "$luaDebug",
             type: "breakpoints",
@@ -160,7 +160,7 @@ export namespace Send {
         send(dbgBreakpoints);
     }
 
-    export function help(...helpStrs: [string, string][]) {
+    export function help(...helpStrs: Array<[string, string]>): void {
         let nameLength = 0;
         for (const [_, nameAndDesc] of ipairs(helpStrs)) {
             nameLength = math.max(nameLength, nameAndDesc[1].length);
@@ -170,6 +170,6 @@ export namespace Send {
             const [name, desc] = nameAndDesc;
             table.insert(builtStrs, `${name}${string.rep(" ", nameLength - name.length + 1)}: ${desc}`);
         }
-        io.write(table.concat(builtStrs, "\n") + "\n");
+        io.write(`${table.concat(builtStrs, "\n")}\n`);
     }
 }

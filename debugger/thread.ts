@@ -31,5 +31,5 @@ export function isThread(val: unknown): val is LuaThread {
 export const mainThread = (() => {
     const LUA_RIDX_MAINTHREAD = 1;
     const registryMainThread = debug.getregistry()[LUA_RIDX_MAINTHREAD];
-    return isThread(registryMainThread) && registryMainThread || mainThreadName;
+    return isThread(registryMainThread) ? registryMainThread : mainThreadName;
 })();

@@ -21,14 +21,14 @@
 //SOFTWARE.
 
 // Lua 5.2+ versions
-declare function rawlen<T extends object>(this: void, v: T | string): number;
+declare function rawlen<T extends AnyTable>(this: void, v: T | string): number;
 
 declare function load(
     this: void,
     chunk: string,
     chunkname?: string,
     mode?: "b" | "t" | "bt",
-    env?: Object
+    env?: AnyTable
 ): LuaMultiReturn<[{ (this: void): unknown }, undefined] | [undefined, string]>;
 
 declare function loadfile(
@@ -44,12 +44,14 @@ export const luaCoroutineWrap = coroutine.wrap;
 export const luaDebugTraceback = debug.traceback;
 export const luaCoroutineCreate = coroutine.create;
 export const luaCoroutineResume = coroutine.resume;
-export const luaUnpack = (unpack || (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack);
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+export const luaUnpack = (unpack ?? (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack);
 
-export const luaRawLen = rawlen || function<T extends object>(v: T | string): number {
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+export const luaRawLen = rawlen ?? function<T extends AnyTable>(v: T | string): number {
     const mt = getmetatable(v);
     if (!mt || !rawget(mt as {__len?: unknown}, "__len")) {
-        return (v as unknown[]).length;
+        return (v as unknown as unknown[]).length;
     } else {
         let len = 1;
         while (rawget(v as Record<string, unknown>, len as unknown as string)) {
@@ -67,7 +69,8 @@ export function loadLuaString(
     str: string,
     env?: Env
 ): LuaMultiReturn<[{ (this: void): unknown }, undefined] | [undefined, string]> {
-    if (setfenv) {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (setfenv !== undefined) {
         const [f, e] = loadstring(str, str);
         if (f && env) {
             setfenv(f, env);
@@ -83,7 +86,8 @@ export function loadLuaFile(
     filename: string,
     env?: Env
 ): LuaMultiReturn<[{ (this: void): unknown }, undefined] | [undefined, string]> {
-    if (setfenv) {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (setfenv !== undefined) {
         const [f, e] = loadfile(filename);
         if (f && env) {
             setfenv(f, env);
@@ -95,10 +99,11 @@ export function loadLuaFile(
     }
 }
 
-export function luaGetEnv(level: number, thread?: LuaThread) {
-    const info = thread && debug.getinfo(thread, level + 1, "f") || debug.getinfo(level + 1, "f");
+export function luaGetEnv(level: number, thread?: LuaThread): Env | undefined {
+    const info = thread ? assert(debug.getinfo(thread, level + 1, "f")) : assert(debug.getinfo(level + 1, "f"));
     const func = assert(info.func);
-    if (getfenv) {
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    if (getfenv !== undefined) {
         return getfenv(func) as Env | undefined;
     } else {
         let i = 1;
