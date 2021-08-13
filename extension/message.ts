@@ -20,11 +20,9 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
-/// <reference path = "../debugger/protocol.d.ts" />
-
 export namespace Message {
     function isMessage(obj: Exclude<unknown, null | undefined>): obj is LuaDebug.Message {
-        return obj !== null && obj !== undefined && (obj as LuaDebug.Message).tag === "$luaDebug";
+        return obj !== null && typeof obj !== "undefined" && (obj as Partial<LuaDebug.Message>).tag === "$luaDebug";
     }
 
     export function parse(text: string): [LuaDebug.Message[], string, string] {
@@ -60,7 +58,8 @@ export namespace Message {
                                 let message: unknown;
                                 try {
                                     message = JSON.parse(possibleMessage);
-                                } catch {}
+                                } catch {
+                                }
                                 if (isMessage(message)) {
                                     messages.push(message);
                                     strs.push(text.substring(strStartIndex, openBraceIndex));

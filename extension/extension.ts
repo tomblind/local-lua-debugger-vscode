@@ -28,10 +28,10 @@ import {LaunchConfig, isCustomProgramConfig, LuaProgramConfig} from "./launchCon
 
 const enableServer = true;
 const debuggerType = "lua-local";
-const interpreterSetting = debuggerType + ".interpreter";
+const interpreterSetting = `${debuggerType}.interpreter`;
 
 function abortLaunch(message: string) {
-    vscode.window.showErrorMessage(message);
+    void vscode.window.showErrorMessage(message);
     // tslint:disable-next-line:no-null-keyword
     return null;
 }
@@ -44,53 +44,54 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
     ): vscode.ProviderResult<vscode.DebugConfiguration> {
         //Validate config
         const editor = vscode.window.activeTextEditor;
-        if (config.request === undefined || config.type === undefined) {
-            if (editor === undefined || editor.document.languageId !== "lua" || editor.document.isUntitled) {
+        if (typeof config.request === "undefined" || typeof config.type === "undefined") {
+            if (typeof editor === "undefined" || editor.document.languageId !== "lua" || editor.document.isUntitled) {
                 return abortLaunch("Nothing to debug");
             }
             config.request = "launch";
             config.type = debuggerType;
         }
 
-        if (config.program === undefined) {
-            config.program = {} as LuaProgramConfig;
-        }
-
-        if (!isCustomProgramConfig(config.program)) {
-            if (config.program.lua === undefined) {
+        if (typeof config.program === "undefined" || !isCustomProgramConfig(config.program)) {
+            const luaConfig: Partial<LuaProgramConfig> = config.program ?? {};
+            if (typeof luaConfig.lua === "undefined") {
                 const luaBin: string | undefined = vscode.workspace.getConfiguration().get(interpreterSetting);
-                if (luaBin === undefined || luaBin.length === 0) {
+                if (typeof luaBin === "undefined" || luaBin.length === 0) {
                     return abortLaunch(
                         `You must set "${interpreterSetting}" in your settings, or "program.lua" `
-                        + `in your launch.json, to debug with a lua interpreter.`
+                        + "in your launch.json, to debug with a lua interpreter."
                     );
                 }
-                config.program.lua = luaBin;
+                luaConfig.lua = luaBin;
             }
-            if (config.program.file === undefined) {
-                if (editor === undefined || editor.document.languageId !== "lua" || editor.document.isUntitled) {
+            if (typeof luaConfig.file === "undefined") {
+                if (typeof editor === "undefined"
+                    || editor.document.languageId !== "lua"
+                    || editor.document.isUntitled
+                ) {
                     return abortLaunch("'program.file' not set in launch.json");
                 }
-                config.program.file = editor.document.uri.fsPath;
+                luaConfig.file = editor.document.uri.fsPath;
             }
+            config.program = luaConfig as LuaProgramConfig;
         }
 
         //Pass paths to debugger
-        if (folder !== undefined) {
+        if (typeof folder !== "undefined") {
             config.workspacePath = folder.uri.fsPath;
-        } else if (vscode.window.activeTextEditor !== undefined) {
+        } else if (typeof vscode.window.activeTextEditor !== "undefined") {
             config.workspacePath = path.dirname(vscode.window.activeTextEditor.document.uri.fsPath);
         } else {
             return abortLaunch("No path for debugger");
         }
 
         const extension = vscode.extensions.getExtension("tomblind.local-lua-debugger-vscode");
-        if (extension === undefined) {
+        if (typeof extension === "undefined") {
             return abortLaunch("Failed to find extension path");
         }
         config.extensionPath = extension.extensionPath;
 
-        if (config.cwd === undefined) {
+        if (typeof config.cwd === "undefined") {
             config.cwd = config.workspacePath;
         }
 
@@ -98,16 +99,17 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
     }
 };
 
-let debugAdapaterDescriptorFactory: (vscode.DebugAdapterDescriptorFactory & { dispose(): void }) | undefined;
+let debugAdapaterDescriptorFactory: (vscode.DebugAdapterDescriptorFactory & { dispose: () => void }) | undefined;
+// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 if (enableServer) {
-    let server: Net.Server | undefined;
+    let server: Net.Server | null = null;
 
     debugAdapaterDescriptorFactory = {
         createDebugAdapterDescriptor(
             session: vscode.DebugSession,
             executable: vscode.DebugAdapterExecutable | undefined
         ): vscode.ProviderResult<vscode.DebugAdapterDescriptor> {
-            if (server === undefined) {
+            if (server === null) {
                 server = Net.createServer(socket => {
                     const debugSession = new LuaDebugSession();
                     debugSession.setRunAsServer(true);
@@ -118,20 +120,20 @@ if (enableServer) {
         },
 
         dispose() {
-            if (server !== undefined) {
+            if (server !== null) {
                 server.close();
-                server = undefined;
+                server = null;
             }
         }
     };
 }
 
-export function activate(context: vscode.ExtensionContext) {
+export function activate(context: vscode.ExtensionContext): void {
     context.subscriptions.push(
         vscode.debug.registerDebugConfigurationProvider(debuggerType, configurationProvider)
     );
 
-    if (debugAdapaterDescriptorFactory !== undefined) {
+    if (typeof debugAdapaterDescriptorFactory !== "undefined") {
         context.subscriptions.push(
             vscode.debug.registerDebugAdapterDescriptorFactory(debuggerType, debugAdapaterDescriptorFactory)
         );
@@ -139,5 +141,5 @@ export function activate(context: vscode.ExtensionContext) {
     }
 }
 
-export function deactivate() {
+export function deactivate(): void {
 }

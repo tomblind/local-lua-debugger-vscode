@@ -25,10 +25,12 @@
         "corona"
     ],
     "scripts": {
+        "lint-extension": "cd extension && eslint . && cd ..",
+        "lint": "npm run lint-extension",
         "build-debugger": "tstl -p debugger",
         "build-extension": "tsc -p extension",
         "build": "npm run build-debugger && npm run build-extension",
-        "bundle": "npm run clean && npm run build && vsce package",
+        "bundle": "npm run clean && npm run lint && npm run build && vsce package",
         "publish": "npm run bundle && vsce publish",
         "clean": "rm -f debugger/*.lua && rm -f debugger/*.lua.map && rm -f extension/*.js && rm -f extension/*.js.map && rm -f *.vsix"
     },
@@ -38,6 +40,9 @@
     "devDependencies": {
         "@types/node": "^16.4.13",
         "@types/vscode": "^1.59.0",
+        "@typescript-eslint/eslint-plugin": "^4.29.1",
+        "@typescript-eslint/parser": "^4.29.1",
+        "eslint": "^7.32.0",
         "tslint": "^6.1.3",
         "tslint-eslint-rules": "^5.4.0",
         "typescript": "^4.3.5",

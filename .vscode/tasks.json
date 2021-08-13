@@ -59,6 +59,15 @@
 			"problemMatcher": [
 				"$tsc"
 			]
+		},
+		{
+			"type": "npm",
+			"script": "lint",
+			"problemMatcher": [
+				"$eslint-stylish"
+			],
+			"label": "Lint",
+			"detail": "npm run lint-extensions"
 		}
 	]
 }

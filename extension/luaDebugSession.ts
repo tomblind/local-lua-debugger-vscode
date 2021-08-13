@@ -20,8 +20,6 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
-/// <reference path = "../debugger/protocol.d.ts" />
-
 import {DebugProtocol} from "vscode-debugprotocol";
 import {
     Breakpoint,
@@ -38,7 +36,7 @@ import {
     Handles,
     ThreadEvent
 } from "vscode-debugadapter";
-import * as child_process from "child_process";
+import * as childProcess from "child_process";
 import * as path from "path";
 import * as fs from "fs";
 import {Message} from "./message";
@@ -59,12 +57,13 @@ const enum OutputCategory {
     StdErr = "stderr",
     Command = "command",
     Request = "request",
+    // eslint-disable-next-line @typescript-eslint/no-shadow
     Message = "message",
     Info = "info",
     Error = "error"
 }
 
-const mainThreadId = 1;
+// const mainThreadId = 1;
 const maxStackCount = 100;
 const metatableDisplayName = "[[metatable]]";
 const tableLengthDisplayName = "[[length]]";
@@ -89,8 +88,8 @@ function sortVariables(a: Variable, b: Variable): number {
         return aIsBracketted ? -1 : 1;
     }
 
-    const aAsNum = +a.name;
-    const bAsNum = +b.name;
+    const aAsNum = Number(a.name);
+    const bAsNum = Number(b.name);
     const aIsNum = !isNaN(aAsNum);
     const bIsNum = !isNaN(bAsNum);
     if (aIsNum !== bIsNum) {
@@ -129,7 +128,7 @@ function makeFrameId(threadId: number, frame: number) {
 export class LuaDebugSession extends LoggingDebugSession {
     private readonly fileBreakpoints: { [file: string]: DebugProtocol.SourceBreakpoint[] | undefined } = {};
     private config?: LaunchConfig;
-    private process?: child_process.ChildProcess;
+    private process: childProcess.ChildProcess | null = null;
     private outputText = "";
     private onConfigurationDone?: () => void;
     private readonly messageHandlerQueue: MessageHandler[] = [];
@@ -149,7 +148,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     ): void {
         this.showOutput("initializeRequest", OutputCategory.Request);
 
-        if (response.body === undefined) {
+        if (typeof response.body === "undefined") {
             response.body = {};
         }
 
@@ -172,7 +171,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         super.configurationDoneRequest(response, args);
 
-        if (this.onConfigurationDone !== undefined) {
+        if (typeof this.onConfigurationDone !== "undefined") {
             this.onConfigurationDone();
         }
     }
@@ -180,7 +179,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     protected async launchRequest(
         response: DebugProtocol.LaunchResponse,
         args: DebugProtocol.LaunchRequestArguments & LaunchConfig
-    ) {
+    ): Promise<void> {
         this.config = args;
         this.autoContinueNext = this.config.stopOnEntry !== true;
 
@@ -199,7 +198,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             shell: true
         };
 
-        if (this.config.env !== undefined) {
+        if (typeof this.config.env !== "undefined") {
             for (const key in this.config.env) {
                 const envKey = getEnvKey(processOptions.env, key);
                 processOptions.env[envKey] = this.config.env[key];
@@ -210,10 +209,10 @@ export class LuaDebugSession extends LoggingDebugSession {
         processOptions.env[envVariable] = "1";
 
         //Pass options via environment variables
-        if (this.config.scriptRoots !== undefined) {
+        if (typeof this.config.scriptRoots !== "undefined") {
             processOptions.env[scriptRootsEnvVariable] = this.config.scriptRoots.join(";");
         }
-        if (this.config.breakInCoroutines !== undefined) {
+        if (typeof this.config.breakInCoroutines !== "undefined") {
             processOptions.env[breakInCoroutinesEnv] = this.config.breakInCoroutines ? "1" : "0";
         }
 
@@ -228,21 +227,23 @@ export class LuaDebugSession extends LoggingDebugSession {
         let processArgs: string[];
         if (isCustomProgramConfig(this.config.program)) {
             processExecutable = `"${this.config.program.command}"`;
-            processArgs = this.config.args !== undefined ? this.config.args : [];
+            processArgs = typeof this.config.args !== "undefined" ? this.config.args : [];
 
         } else {
             processExecutable = `"${this.config.program.lua}"`;
-            const programArgs = (this.config.args !== undefined) ? `, ${this.config.args.map(a => `[[${a}]]`)}` : "";
+            const programArgs = (typeof this.config.args !== "undefined")
+                ? `, ${this.config.args.map(a => `[[${a}]]`)}`
+                : "";
             processArgs = [
                 "-e",
-                `"require('lldebugger').runFile(`
+                "\"require('lldebugger').runFile("
                 + `[[${this.config.program.file}]],`
-                + `true,`
-                +`{[-1]=[[${this.config.program.lua}]],[0]=[[${this.config.program.file}]]${programArgs}}`
-                + `)"`
+                + "true,"
+                + `{[-1]=[[${this.config.program.lua}]],[0]=[[${this.config.program.file}]]${programArgs}}`
+                + ")\""
             ];
         }
-        this.process = child_process.spawn(processExecutable, processArgs, processOptions);
+        this.process = childProcess.spawn(processExecutable, processArgs, processOptions);
 
         this.showOutput(
             `launching \`${processExecutable} ${processArgs.join(" ")}\` from "${cwd}"`,
@@ -250,10 +251,10 @@ export class LuaDebugSession extends LoggingDebugSession {
         );
 
         //Process callbacks
-        this.assert(this.process.stdout).on("data", data => this.onDebuggerOutput(data, false));
-        this.assert(this.process.stderr).on("data", data => this.onDebuggerOutput(data, true));
+        this.assert(this.process.stdout).on("data", data => { void this.onDebuggerOutput(data, false); });
+        this.assert(this.process.stderr).on("data", data => { void this.onDebuggerOutput(data, true); });
         this.process.on("close", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
-        this.process.on("disconnect", () => this.onDebuggerTerminated(`disconnected`));
+        this.process.on("disconnect", () => this.onDebuggerTerminated("disconnected"));
         this.process.on(
             "error",
             err => this.onDebuggerTerminated(
@@ -265,27 +266,27 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         this.isRunning = true;
 
-        this.showOutput(`process launched`, OutputCategory.Info);
+        this.showOutput("process launched", OutputCategory.Info);
         this.sendResponse(response);
     }
 
     protected async setBreakPointsRequest(
         response: DebugProtocol.SetBreakpointsResponse,
         args: DebugProtocol.SetBreakpointsArguments
-    ) {
-        this.showOutput(`setBreakPointsRequest`, OutputCategory.Request);
+    ): Promise<void> {
+        this.showOutput("setBreakPointsRequest", OutputCategory.Request);
 
         const filePath = args.source.path as string;
 
-        if (this.process !== undefined && !this.isRunning) {
+        if (this.process !== null && !this.isRunning) {
             const oldBreakpoints = this.fileBreakpoints[filePath];
-            if (oldBreakpoints !== undefined) {
+            if (typeof oldBreakpoints !== "undefined") {
                 for (const breakpoint of oldBreakpoints) {
                     await this.deleteBreakpoint(filePath, breakpoint);
                 }
             }
 
-            if (args.breakpoints !== undefined) {
+            if (typeof args.breakpoints !== "undefined") {
                 for (const breakpoint of args.breakpoints) {
                     await this.setBreakpoint(filePath, breakpoint);
                 }
@@ -297,15 +298,15 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         this.fileBreakpoints[filePath] = args.breakpoints;
 
-        const breakpoints: Breakpoint[] = args.breakpoints !== undefined
+        const breakpoints: Breakpoint[] = (typeof args.breakpoints !== "undefined")
             ? args.breakpoints.map(breakpoint => new Breakpoint(true, breakpoint.line))
             : [];
         response.body = {breakpoints};
         this.sendResponse(response);
     }
 
-    protected async threadsRequest(response: DebugProtocol.ThreadsResponse) {
-        this.showOutput(`threadsRequest`, OutputCategory.Request);
+    protected async threadsRequest(response: DebugProtocol.ThreadsResponse): Promise<void> {
+        this.showOutput("threadsRequest", OutputCategory.Request);
 
         const msg = await this.waitForCommandResponse("threads");
 
@@ -337,15 +338,16 @@ export class LuaDebugSession extends LoggingDebugSession {
     protected async stackTraceRequest(
         response: DebugProtocol.StackTraceResponse,
         args: DebugProtocol.StackTraceArguments
-    ) {
+    ): Promise<void> {
         this.showOutput(
-            `stackTraceRequest ${args.startFrame}/${args.levels} (thread ${args.threadId})`, OutputCategory.Request
+            `stackTraceRequest ${args.startFrame}/${args.levels} (thread ${args.threadId})`,
+            OutputCategory.Request
         );
 
         const msg = await this.waitForCommandResponse(`thread ${args.threadId}`);
 
-        const startFrame = args.startFrame !== undefined ? args.startFrame : 0;
-        const maxLevels = args.levels !== undefined ? args.levels : maxStackCount;
+        const startFrame = typeof args.startFrame !== "undefined" ? args.startFrame : 0;
+        const maxLevels = typeof args.levels !== "undefined" ? args.levels : maxStackCount;
         if (msg.type === "stack") {
             const frames: DebugProtocol.StackFrame[] = [];
             const endFrame = Math.min(startFrame + maxLevels, msg.frames.length);
@@ -357,9 +359,9 @@ export class LuaDebugSession extends LoggingDebugSession {
                 let column = 1; //Needed for exception display: https://github.com/microsoft/vscode/issues/46080
 
                 //Mapped source
-                if (frame.mappedLocation !== undefined) {
+                if (typeof frame.mappedLocation !== "undefined") {
                     const mappedPath = this.resolvePath(frame.mappedLocation.source);
-                    if (mappedPath !== undefined) {
+                    if (typeof mappedPath !== "undefined") {
                         source = new Source(path.basename(mappedPath), mappedPath);
                         line = frame.mappedLocation.line;
                         column = frame.mappedLocation.column;
@@ -368,19 +370,19 @@ export class LuaDebugSession extends LoggingDebugSession {
 
                 //Un-mapped source
                 const sourcePath = this.resolvePath(frame.source);
-                if (source === undefined && sourcePath !== undefined) {
+                if (typeof source === "undefined" && typeof sourcePath !== "undefined") {
                     source = new Source(path.basename(frame.source), sourcePath);
                 }
 
                 //Function name
-                let frameFunc = frame.func !== undefined ? frame.func : "???";
-                if (sourcePath === undefined) {
+                let frameFunc = typeof frame.func !== "undefined" ? frame.func : "???";
+                if (typeof sourcePath === "undefined") {
                     frameFunc += ` ${frame.source}`;
                 }
 
                 const frameId = makeFrameId(args.threadId, i + 1);
                 const stackFrame: DebugProtocol.StackFrame = new StackFrame(frameId, frameFunc, source, line, column);
-                stackFrame.presentationHint = sourcePath === undefined ? "subtle" : "normal";
+                stackFrame.presentationHint = typeof sourcePath === "undefined" ? "subtle" : "normal";
                 frames.push(stackFrame);
             }
             response.body = {stackFrames: frames, totalFrames: msg.frames.length};
@@ -391,8 +393,11 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
-    protected async scopesRequest(response: DebugProtocol.ScopesResponse, args: DebugProtocol.ScopesArguments) {
-        this.showOutput(`scopesRequest`, OutputCategory.Request);
+    protected async scopesRequest(
+        response: DebugProtocol.ScopesResponse,
+        args: DebugProtocol.ScopesArguments
+    ): Promise<void> {
+        this.showOutput("scopesRequest", OutputCategory.Request);
 
         const {threadId, frame} = parseFrameId(args.frameId);
         await this.waitForCommandResponse(`thread ${threadId}`);
@@ -411,35 +416,35 @@ export class LuaDebugSession extends LoggingDebugSession {
     protected async variablesRequest(
         response: DebugProtocol.VariablesResponse,
         args: DebugProtocol.VariablesArguments
-    ) {
+    ): Promise<void> {
         let cmd: string | undefined;
         let baseName: string | undefined;
 
         switch (args.variablesReference) {
         case ScopeType.Local:
             cmd = "locals";
-            this.showOutput(`variablesRequest locals`, OutputCategory.Request);
+            this.showOutput("variablesRequest locals", OutputCategory.Request);
             break;
 
         case ScopeType.Upvalue:
             cmd = "ups";
-            this.showOutput(`variablesRequest ups`, OutputCategory.Request);
+            this.showOutput("variablesRequest ups", OutputCategory.Request);
             break;
 
         case ScopeType.Global:
             cmd = "globals";
-            this.showOutput(`variablesRequest globals`, OutputCategory.Request);
+            this.showOutput("variablesRequest globals", OutputCategory.Request);
             break;
 
         default:
             baseName = this.assert(this.variableHandles.get(args.variablesReference));
             cmd = `props ${baseName}`;
-            if (args.filter !== undefined) {
+            if (typeof args.filter !== "undefined") {
                 cmd += ` ${args.filter}`;
-                if (args.start !== undefined) {
+                if (typeof args.start !== "undefined") {
                     const start = Math.max(args.start, 1);
                     cmd += ` ${start}`;
-                    if (args.count !== undefined) {
+                    if (typeof args.count !== "undefined") {
                         const count = args.start + args.count - start;
                         cmd += ` ${count}`;
                     }
@@ -464,15 +469,15 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         } else if (vars.type === "properties") {
             for (const variable of vars.properties) {
-                const refName = baseName === undefined ? variable.name : `${baseName}[${variable.name}]`;
+                const refName = typeof baseName === "undefined" ? variable.name : `${baseName}[${variable.name}]`;
                 variables.push(this.buildVariable(variable, refName));
             }
 
-            if (vars.metatable !== undefined && baseName !== undefined) {
+            if (typeof vars.metatable !== "undefined" && typeof baseName !== "undefined") {
                 variables.push(this.buildVariable(vars.metatable, `getmetatable(${baseName})`, metatableDisplayName));
             }
 
-            if (vars.length !== undefined) {
+            if (typeof vars.length !== "undefined") {
                 const value: LuaDebug.Value = {type: "number", value: vars.length.toString()};
                 variables.push(this.buildVariable(value, `#${baseName}`, tableLengthDisplayName));
             }
@@ -487,7 +492,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     protected continueRequest(response: DebugProtocol.ContinueResponse, args: DebugProtocol.ContinueArguments): void {
-        this.showOutput(`continueRequest`, OutputCategory.Request);
+        this.showOutput("continueRequest", OutputCategory.Request);
         if (this.sendCommand("cont")) {
             this.variableHandles.reset();
             this.isRunning = true;
@@ -498,7 +503,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     protected nextRequest(response: DebugProtocol.NextResponse, args: DebugProtocol.NextArguments): void {
-        this.showOutput(`nextRequest`, OutputCategory.Request);
+        this.showOutput("nextRequest", OutputCategory.Request);
         if (this.sendCommand("step")) {
             this.variableHandles.reset();
             this.isRunning = true;
@@ -509,7 +514,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     protected stepInRequest(response: DebugProtocol.StepInResponse, args: DebugProtocol.StepInArguments): void {
-        this.showOutput(`stepInRequest`, OutputCategory.Request);
+        this.showOutput("stepInRequest", OutputCategory.Request);
         if (this.sendCommand("stepin")) {
             this.variableHandles.reset();
             this.isRunning = true;
@@ -520,7 +525,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     protected stepOutRequest(response: DebugProtocol.StepOutResponse, args: DebugProtocol.StepOutArguments): void {
-        this.showOutput(`stepOutRequest`, OutputCategory.Request);
+        this.showOutput("stepOutRequest", OutputCategory.Request);
         if (this.sendCommand("stepout")) {
             this.variableHandles.reset();
             this.isRunning = true;
@@ -533,7 +538,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     protected async setVariableRequest(
         response: DebugProtocol.SetVariableResponse,
         args: DebugProtocol.SetVariableArguments
-    ) {
+    ): Promise<void> {
         let msg: LuaDebug.Message;
         if (args.variablesReference === ScopeType.Global
             || args.variablesReference === ScopeType.Local
@@ -560,7 +565,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         const result = this.handleEvaluationResult(args.value, msg);
         if (!result.success) {
-            if (result.error !== undefined) {
+            if (typeof result.error !== "undefined") {
                 this.showOutput(result.error, OutputCategory.Error);
             }
             response.success = false;
@@ -575,11 +580,11 @@ export class LuaDebugSession extends LoggingDebugSession {
     protected async evaluateRequest(
         response: DebugProtocol.EvaluateResponse,
         args: DebugProtocol.EvaluateArguments
-    ) {
+    ): Promise<void> {
         const expression = args.expression;
         this.showOutput(`evaluateRequest ${expression}`, OutputCategory.Request);
 
-        if (args.frameId !== undefined) {
+        if (typeof args.frameId !== "undefined") {
             const {threadId, frame} = parseFrameId(args.frameId);
             await this.waitForCommandResponse(`thread ${threadId}`);
             await this.waitForCommandResponse(`frame ${frame}`);
@@ -589,12 +594,12 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         const result = this.handleEvaluationResult(expression, msg);
         if (!result.success) {
-            if (result.error !== undefined && args.context !== "hover") {
+            if (typeof result.error !== "undefined" && args.context !== "hover") {
                 if (args.context !== "watch") {
                     this.showOutput(result.error, OutputCategory.Error);
                 }
                 response.success = false;
-                const errorMsg = result.error.match(/^\[.+\]:\d+:(.+)/);
+                const errorMsg = /^\[.+\]:\d+:(.+)/.exec(result.error);
                 response.message = (errorMsg !== null && errorMsg.length > 1) ? errorMsg[1] : result.error;
             }
 
@@ -609,11 +614,11 @@ export class LuaDebugSession extends LoggingDebugSession {
         response: DebugProtocol.TerminateResponse,
         args: DebugProtocol.TerminateArguments
     ): void {
-        this.showOutput(`terminateRequest`, OutputCategory.Request);
+        this.showOutput("terminateRequest", OutputCategory.Request);
 
-        if (this.process !== undefined) {
+        if (this.process !== null) {
             if (process.platform === "win32") {
-                child_process.spawn("taskkill", ["/pid", this.assert(this.process.pid).toString(), "/f", "/t"]);
+                childProcess.spawn("taskkill", ["/pid", this.assert(this.process.pid).toString(), "/f", "/t"]);
             } else {
                 this.process.kill();
             }
@@ -627,10 +632,10 @@ export class LuaDebugSession extends LoggingDebugSession {
     private handleEvaluationResult(
         expression: string,
         msg: LuaDebug.Message
-    ) : {success: true; value: string; variablesReference: number} | {success: false; error?: string} {
+    ): {success: true; value: string; variablesReference: number} | {success: false; error?: string} {
         if (msg.type === "result") {
             const variablesReference = msg.result.type === "table" ? this.variableHandles.create(expression) : 0;
-            const value = `${msg.result.value !== undefined ? msg.result.value : `[${msg.result.type}]`}`;
+            const value = `${typeof msg.result.value !== "undefined" ? msg.result.value : `[${msg.result.type}]`}`;
             return {success: true, value, variablesReference};
 
         } else if (msg.type === "error") {
@@ -648,23 +653,25 @@ export class LuaDebugSession extends LoggingDebugSession {
         let ref: number | undefined;
         if (variable.type === "table") {
             ref = this.variableHandles.create(refName);
-            valueStr = variable.value !== undefined ? variable.value : "[table]";
-        } else if (variable.value === undefined) {
+            valueStr = typeof variable.value !== "undefined" ? variable.value : "[table]";
+        } else if (typeof variable.value === "undefined") {
             valueStr = `[${variable.type}]`;
         } else {
             valueStr = variable.value;
         }
-        return new Variable(
-            variableName !== undefined ? variableName : (variable as LuaDebug.Variable).name,
-            valueStr,
-            ref,
-            variable.length !== undefined && variable.length > 0 ? variable.length + 1 : variable.length,
-            variable.type === "table" ? 1 : undefined
-        );
+        const name = typeof variableName !== "undefined" ? variableName : (variable as LuaDebug.Variable).name;
+        const indexedVariables = typeof variable.length !== "undefined" && variable.length > 0
+            ? variable.length + 1
+            : variable.length;
+        if (variable.type === "table") {
+            return new Variable(name, valueStr, ref, indexedVariables, 1);
+        } else {
+            return new Variable(name, valueStr, ref, indexedVariables);
+        }
     }
 
     private assert<T>(value: T | null | undefined, message = "assertion failed"): T {
-        if (value === null || value === undefined) {
+        if (value === null || typeof value === "undefined") {
             this.sendEvent(new OutputEvent(message));
             throw new Error(message);
         }
@@ -673,11 +680,15 @@ export class LuaDebugSession extends LoggingDebugSession {
 
     private resolvePath(filePath: string) {
         if (filePath.length === 0) {
-            return undefined;
+            return;
         }
 
         if (path.isAbsolute(filePath)) {
-            return fs.existsSync(filePath) ? filePath : undefined;
+            if (fs.existsSync(filePath)) {
+                return filePath;
+            } else {
+                return;
+            }
         }
 
         const config = this.assert(this.config);
@@ -686,8 +697,8 @@ export class LuaDebugSession extends LoggingDebugSession {
             return fullPath;
         }
 
-        if (config.scriptRoots === undefined) {
-            return undefined;
+        if (typeof config.scriptRoots === "undefined") {
+            return;
         }
         for (const rootPath of config.scriptRoots) {
             if (path.isAbsolute(rootPath)) {
@@ -700,13 +711,13 @@ export class LuaDebugSession extends LoggingDebugSession {
             }
         }
 
-        return undefined;
+        return;
     }
 
     private updateLuaPath(pathKey: string, env: NodeJS.ProcessEnv, force: boolean) {
         const luaPathKey = getEnvKey(env, pathKey);
         let luaPath = env[luaPathKey];
-        if (luaPath === undefined) {
+        if (typeof luaPath === "undefined") {
             if (!force) {
                 return;
             }
@@ -716,11 +727,11 @@ export class LuaDebugSession extends LoggingDebugSession {
             luaPath += ";";
         }
 
-        env[luaPathKey] = luaPath + `${this.assert(this.config).extensionPath}/debugger/?.lua`;
+        env[luaPathKey] = `${luaPath}${this.assert(this.config).extensionPath}/debugger/?.lua`;
     }
 
     private setBreakpoint(filePath: string, breakpoint: DebugProtocol.SourceBreakpoint) {
-        const cmd = breakpoint.condition !== undefined
+        const cmd = typeof breakpoint.condition !== "undefined"
             ? `break set ${filePath}:${breakpoint.line} ${breakpoint.condition}`
             : `break set ${filePath}:${breakpoint.line}`;
         return this.waitForCommandResponse(cmd);
@@ -768,7 +779,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
     private handleDebugMessage(msg: LuaDebug.Message) {
         const handler = this.messageHandlerQueue.shift();
-        if (handler !== undefined) {
+        if (typeof handler !== "undefined") {
             handler(msg);
         }
     }
@@ -797,17 +808,17 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         this.outputText = unprocessed;
 
-        if (debugBreak !== undefined) {
+        if (typeof debugBreak !== "undefined") {
             await this.onDebuggerStop(debugBreak);
         }
     }
 
     private onDebuggerTerminated(result: string, category = OutputCategory.Info) {
-        if (this.process === undefined) {
+        if (this.process === null) {
             return;
         }
 
-        this.process = undefined;
+        this.process = null;
         this.isRunning = false;
 
         if (this.outputText.length > 0) {
@@ -820,7 +831,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     }
 
     private sendCommand(cmd: string) {
-        if (this.process === undefined || this.isRunning) {
+        if (this.process === null || this.isRunning) {
             return false;
         }
 
@@ -851,12 +862,12 @@ export class LuaDebugSession extends LoggingDebugSession {
         } else if (category === OutputCategory.Error) {
             this.sendEvent(new OutputEvent(`\n[${category}] ${msg}\n`, "stderr"));
 
-        } else if (this.config !== undefined && this.config.verbose === true) {
+        } else if (typeof this.config !== "undefined" && this.config.verbose === true) {
             this.sendEvent(new OutputEvent(`\n[${category}] ${msg}\n`));
         }
     }
 
     private waitForConfiguration() {
-        return new Promise<void>(resolve => this.onConfigurationDone = resolve);
+        return new Promise<void>(resolve => { this.onConfigurationDone = resolve; });
     }
 }
