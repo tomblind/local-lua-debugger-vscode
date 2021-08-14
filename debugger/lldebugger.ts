@@ -25,7 +25,7 @@ import {Debugger} from "./debugger";
 
 //Set global reference by directly accessing self from TSTL exports variable
 declare const ____exports: unknown;
-_G.lldebugger = _G.lldebugger ?? ____exports;
+_G.lldebugger = _G.lldebugger || ____exports;
 
 //Don't buffer io
 io.stdout.setvbuf("no");

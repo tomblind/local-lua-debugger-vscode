@@ -258,6 +258,8 @@ export namespace SourceMap {
             cache[fileName] = sourceMap;
         }
 
-        return sourceMap !== false ? sourceMap : undefined;
+        if (sourceMap !== false) {
+            return sourceMap;
+        }
     }
 }
