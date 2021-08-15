@@ -40,7 +40,10 @@ export namespace Path {
         if (!cwd) {
             const [p] = io.popen(separator === "\\" ? "cd" : "pwd");
             if (p) {
-                [cwd] = p.read("*a").match("^%s*(.-)%s*$");
+                const output = p.read("*a");
+                if (output) {
+                    [cwd] = output.match("^%s*(.-)%s*$");
+                }
             }
             cwd = cwd ?? "";
         }

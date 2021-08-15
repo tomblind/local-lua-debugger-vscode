@@ -762,21 +762,21 @@ declare namespace string {
      *
      *      x = string.gsub("hello world", "(%w+)", "%1 %1")
      *      -->; x="hello hello world world"
-     *
+     *      
      *      x = string.gsub("hello world", "%w+", "%0 %0", 1)
      *      -->; x="hello hello world"
-     *
+     *      
      *      x = string.gsub("hello world from Lua", "(%w+)%s*(%w+)", "%2 %1")
      *      -->; x="world hello Lua from"
-     *
+     *      
      *      x = string.gsub("home = $HOME, user = $USER", "%$(%w+)", os.getenv)
      *      -->; x="home = /home/roberto, user = roberto"
-     *
+     *      
      *      x = string.gsub("4+5 = $return 4+5$", "%$(.-)%$", function (s)
      *            return loadstring(s)()
      *          end)
      *      -->; x="4+5 = 9"
-     *
+     *      
      *      local t = {name="lua", version="5.1"}
      *      x = string.gsub("$name-$version.tar.gz", "%$(%w+)", t)
      *      -->; x="lua-5.1.tar.gz"
@@ -1113,17 +1113,17 @@ declare namespace io {
     export function popen(this: void, prog: string, mode?: "r" | "w"): LuaMultiReturn<[LuaFile] | [undefined, string]>;
 
     export type FileReadFormat = "*n" | "*a" | "*l" | number;
-
+    
     export type FileReadFormatType<F extends FileReadFormat> = F extends "*n" ? number : string;
-
+    
     export type FileReadFormatTypeTuple<A extends FileReadFormat[]> = {
-        [I in keyof A]: A[I] extends "*n" ? number : string
+        [I in keyof A]: (A[I] extends "*n" ? number : string) | undefined
     };
 
     /**
      * Equivalent to `io.input():read`.
     */
-    export function read<F extends FileReadFormat = "*l">(this: void, format?: F): FileReadFormatType<F>;
+    export function read<F extends FileReadFormat = "*l">(this: void, format?: F): FileReadFormatType<F> | undefined;
 
     /**
      * Equivalent to `io.input():read`.
@@ -1193,7 +1193,7 @@ declare interface LuaFile {
      * - number: reads a string with up to this number of characters, returning nil on end of file. If number is zero,
      *   it reads nothing and returns an empty string, or nil on end of file.
     */
-    read<F extends io.FileReadFormat = "*l">(this: this, format?: F): io.FileReadFormatType<F>;
+    read<F extends io.FileReadFormat = "*l">(this: this, format?: F): io.FileReadFormatType<F> | undefined;
 
     /**
      * Reads the file `file`, according to the given formats, which specify what to read. For each format, the function
@@ -1273,7 +1273,7 @@ declare namespace os {
         sec?: number;
         isdst?: boolean;
     }
-
+    
     export interface Date extends Time {
         hour: number;
         min: number;
@@ -1472,7 +1472,12 @@ declare namespace debug {
      *   a reasonable name can be found, and the expression `debug.getinfo(print)` returns a table with all available
      *   information about the `print` function.
     */
-    export function getinfo(this: void, thread: LuaThread, function_: Function | number, what?: string): FunctionInfo | undefined;
+    export function getinfo(
+        this: void,
+        thread: LuaThread,
+        function_: Function | number,
+        what?: string
+    ): FunctionInfo | undefined;
 
     /**
      * This function returns the name and the value of the local variable with index `local` of the function at level
@@ -1744,21 +1749,21 @@ declare interface String {
      *
      *      x = string.gsub("hello world", "(%w+)", "%1 %1")
      *      -->; x="hello hello world world"
-     *
+     *      
      *      x = string.gsub("hello world", "%w+", "%0 %0", 1)
      *      -->; x="hello hello world"
-     *
+     *      
      *      x = string.gsub("hello world from Lua", "(%w+)%s*(%w+)", "%2 %1")
      *      -->; x="world hello Lua from"
-     *
+     *      
      *      x = string.gsub("home = $HOME, user = $USER", "%$(%w+)", os.getenv)
      *      -->; x="home = /home/roberto, user = roberto"
-     *
+     *      
      *      x = string.gsub("4+5 = $return 4+5$", "%$(.-)%$", function (s)
      *            return loadstring(s)()
      *          end)
      *      -->; x="4+5 = 9"
-     *
+     *      
      *      local t = {name="lua", version="5.1"}
      *      x = string.gsub("$name-$version.tar.gz", "%$(%w+)", t)
      *      -->; x="lua-5.1.tar.gz"

@@ -213,6 +213,9 @@ export namespace SourceMap {
     function getMap(filePath: string, file: LuaFile) {
         const data = file.read("*a");
         file.close();
+        if (!data) {
+            return;
+        }
 
         const [encodedMap] = data.match(
             "--# sourceMappingURL=data:application/json;base64,([A-Za-z0-9+/=]+)%s*$"
@@ -227,6 +230,9 @@ export namespace SourceMap {
         if (mapFile) {
             const map = mapFile.read("*a");
             mapFile.close();
+            if (!map) {
+                return;
+            }
             const fileDir = Path.dirName(filePath);
             return build(map, fileDir, data);
         }
@@ -235,13 +241,19 @@ export namespace SourceMap {
     function findMap(fileName: string) {
         let [file] = io.open(fileName);
         if (file) {
-            return getMap(fileName, file);
+            const map = getMap(fileName, file);
+            if (map) {
+                return map;
+            }
         }
         for (const path of getScriptRoots()) {
             const filePath = path + fileName;
             [file] = io.open(filePath);
             if (file) {
-                return getMap(filePath, file);
+                const map = getMap(filePath, file);
+                if (map) {
+                    return map;
+                }
             }
         }
     }
