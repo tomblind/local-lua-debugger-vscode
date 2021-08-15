@@ -100,8 +100,8 @@ export function loadLuaFile(
 }
 
 export function luaGetEnv(level: number, thread?: LuaThread): Env | undefined {
-    const info = thread ? assert(debug.getinfo(thread, level + 1, "f")) : assert(debug.getinfo(level + 1, "f"));
-    const func = assert(info.func);
+    const info = thread ? luaAssert(debug.getinfo(thread, level, "f")) : luaAssert(debug.getinfo(level + 1, "f"));
+    const func = luaAssert(info.func);
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (getfenv !== undefined) {
         return getfenv(func) as Env | undefined;

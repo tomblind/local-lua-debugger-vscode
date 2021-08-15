@@ -72,12 +72,17 @@ export namespace Debugger {
     const hookStack: HookType[] = [];
 
     const threadIds = setmetatable(new LuaTable<Thread, number | undefined>(), {__mode: "k"});
+    const threadStackOffsets = setmetatable(new LuaTable<Thread, number | undefined>(), {__mode: "k"});
     const mainThreadId = 1;
     threadIds.set(mainThread, mainThreadId);
     let nextThreadId = mainThreadId + 1;
 
     function getThreadId(thread: Thread) {
         return luaAssert(threadIds.get(thread));
+    }
+
+    function getActiveThread() {
+        return coroutine.running() ?? mainThread;
     }
 
     function backtrace(stack: debug.FunctionInfo[], frameIndex: number) {
@@ -112,20 +117,22 @@ export namespace Debugger {
         Send.frames(frames);
     }
 
-    function getLocals(level: number, thread: Thread): Locals {
+    function getLocals(level: number, thread?: Thread): Locals {
         const locs: Locals = {};
 
+        if (thread === mainThreadName) {
+            return locs; // Accessing locals for main thread, but we're in a coroutine right now
+        }
+
         //Validate level
-        if (isThread(thread)) {
+        if (thread) {
             if (!debug.getinfo(thread, level, "l")) {
                 return locs;
             }
-        } else if (!debug.getinfo(level, "l")) {
-            return locs;
-        }
-
-        if (coroutine.running() !== undefined && !isThread(thread)) {
-            return locs; // Accessing locals for main thread, but we're in a coroutine right now
+        } else {
+            if (!debug.getinfo(level + 1, "l")) {
+                return locs;
+            }
         }
 
         let name: string | undefined;
@@ -134,10 +141,10 @@ export namespace Debugger {
         //Standard locals
         let index = 1;
         while (true) {
-            if (isThread(thread)) {
+            if (thread) {
                 [name, val] = debug.getlocal(thread, level, index);
             } else {
-                [name, val] = debug.getlocal(level, index);
+                [name, val] = debug.getlocal(level + 1, index);
             }
             if (!name) {
                 break;
@@ -154,10 +161,10 @@ export namespace Debugger {
         //Varargs
         index = -1;
         while (true) {
-            if (isThread(thread)) {
+            if (thread) {
                 [name, val] = debug.getlocal(thread, level, index);
             } else {
-                [name, val] = debug.getlocal(level, index);
+                [name, val] = debug.getlocal(level + 1, index);
             }
             if (!name) {
                 break;
@@ -209,9 +216,15 @@ export namespace Debugger {
         }
     }
 
-    function getGlobals(level: number, thread: Thread): Vars {
+    function getGlobals(level: number, thread?: Thread): Vars {
+        if (thread === mainThreadName) {
+            thread = undefined; //Use globals from active thread if main is inaccessible
+        }
+        if (!thread) {
+            ++level;
+        }
         const globs: Vars = {};
-        const fenv = luaGetEnv(level, isThread(thread) ? thread : undefined) ?? _G;
+        const fenv = luaGetEnv(level, thread) ?? _G;
         const metaStack = new LuaTable<AnyNotNil, boolean | undefined>();
         populateGlobals(globs, fenv, metaStack);
         return globs;
@@ -304,20 +317,21 @@ export namespace Debugger {
 
     function execute(
         statement: string,
-        thread: Thread,
-        frame: number,
-        frameOffset: number,
-        info: debug.FunctionInfo
+        level: number,
+        info: debug.FunctionInfo,
+        thread?: Thread
     ): LuaMultiReturn<[true, unknown] | [false, string]> {
-        const activeThread = coroutine.running();
-        if (activeThread && !isThread(thread)) {
+        if (thread === mainThreadName) {
             return $multi(false, "unable to access main thread while running in a coroutine");
         }
 
-        const level = (thread === (activeThread ?? mainThread)) ? (frame + frameOffset + 1) : frame;
-        const locs = getLocals(level + 1, thread);
+        if (!thread) {
+            ++level;
+        }
+
+        const locs = getLocals(level, thread);
         const ups = getUpvalues(info);
-        const fenv = luaGetEnv(level, isThread(thread) ? thread : undefined) ?? _G;
+        const fenv = luaGetEnv(level, thread) ?? _G;
         const env = setmetatable(
             {},
             {
@@ -349,7 +363,7 @@ export namespace Debugger {
         const [success, result] = pcall(func);
         if (success) {
             for (const [_, loc] of pairs(locs)) {
-                if (isThread(thread)) {
+                if (thread) {
                     debug.setlocal(thread, level, loc.index, loc.val);
                 } else {
                     debug.setlocal(level, loc.index, loc.val);
@@ -375,6 +389,10 @@ export namespace Debugger {
         let i = 1;
         if (isThread(threadOrOffset)) {
             thread = threadOrOffset;
+            const offset = threadStackOffsets.get(thread);
+            if (offset) {
+                i += offset;
+            }
         } else {
             i += threadOrOffset;
         }
@@ -401,9 +419,7 @@ export namespace Debugger {
     function debugBreak(activeThread: Thread, stackOffset: number) {
         ++stackOffset;
         const activeStack = getStack(stackOffset);
-
         const activeThreadFrameOffset = stackOffset;
-        const inactiveThreadFrameOffset = 0;
 
         breakAtDepth = -1;
         breakInThread = undefined;
@@ -486,9 +502,9 @@ export namespace Debugger {
                         }
                         currentThread = newThread;
                         frame = 0;
-                        frameOffset = currentThread === activeThread
-                            && activeThreadFrameOffset
-                            || inactiveThreadFrameOffset;
+                        frameOffset = (currentThread === activeThread)
+                            ? activeThreadFrameOffset
+                            : 1 + (threadStackOffsets.get(currentThread) ?? 0);
                         info = luaAssert(currentStack[frame]);
                         source = Path.format(luaAssert(info.source));
                         sourceMap = SourceMap.get(source);
@@ -536,7 +552,7 @@ export namespace Debugger {
                 }
 
             } else if (inp === "locals") {
-                const locs = getLocals(frame + frameOffset + 1, currentThread);
+                const locs = getLocals(frame + frameOffset, currentThread !== activeThread ? currentThread : undefined);
                 mapVarNames(locs, sourceMap);
                 Send.vars(locs);
 
@@ -546,7 +562,10 @@ export namespace Debugger {
                 Send.vars(ups);
 
             } else if (inp === "globals") {
-                const globs = getGlobals(frame + frameOffset + 1, currentThread);
+                const globs = getGlobals(
+                    frame + frameOffset,
+                    currentThread !== activeThread ? currentThread : undefined
+                );
                 mapVarNames(globs, sourceMap);
                 Send.vars(globs);
 
@@ -622,7 +641,12 @@ export namespace Debugger {
 
                 } else {
                     const mappedExpression = mapExpressionNames(expression, sourceMap);
-                    const [s, r] = execute(`return ${mappedExpression}`, currentThread, frame, frameOffset, info);
+                    const [s, r] = execute(
+                        `return ${mappedExpression}`,
+                        frame + frameOffset,
+                        info,
+                        currentThread !== activeThread ? currentThread : undefined
+                    );
                     if (s) {
                         Send.result(r);
                     } else {
@@ -640,7 +664,12 @@ export namespace Debugger {
 
                 } else {
                     const mappedExpression = mapExpressionNames(expression, sourceMap);
-                    const [s, r] = execute(`return ${mappedExpression}`, currentThread, frame, frameOffset, info);
+                    const [s, r] = execute(
+                        `return ${mappedExpression}`,
+                        frame + frameOffset,
+                        info,
+                        currentThread !== activeThread ? currentThread : undefined
+                    );
                     if (s) {
                         if (type(r) === "table") {
                             Send.props(r as AnyTable, kind, tonumber(first), tonumber(count));
@@ -658,7 +687,12 @@ export namespace Debugger {
                     Send.error("Bad statement");
 
                 } else {
-                    const [s, r] = execute(statement, currentThread, frame, frameOffset, info);
+                    const [s, r] = execute(
+                        statement,
+                        frame + frameOffset,
+                        info,
+                        currentThread !== activeThread ? currentThread : undefined
+                    );
                     if (s) {
                         Send.result(r);
                     } else {
@@ -716,7 +750,7 @@ export namespace Debugger {
             return;
         }
 
-        const activeThread = coroutine.running() ?? mainThread;
+        const activeThread = getActiveThread();
 
         //Stepping
         if (breakAtDepth >= 0) {
@@ -749,7 +783,7 @@ export namespace Debugger {
                 if (breakpoint.condition) {
                     const mappedCondition = mapExpressionNames(breakpoint.condition, sourceMap);
                     const condition = `return ${mappedCondition}`;
-                    const [success, result] = execute(condition, activeThread, 0, stackOffset, topFrame);
+                    const [success, result] = execute(condition, stackOffset, topFrame);
                     if (success && result) {
                         const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
                         Send.debugBreak(
@@ -804,7 +838,7 @@ export namespace Debugger {
             skipNextBreak = false;
 
         } else {
-            const thread = coroutine.running() ?? mainThread;
+            const thread = getActiveThread();
             Send.debugBreak(message, "error", getThreadId(thread));
             debugBreak(thread, level);
         }
@@ -815,7 +849,6 @@ export namespace Debugger {
         }
     }
 
-    //coroutine.create replacement for hooking threads
     function registerThread(thread: LuaThread) {
         assert(!threadIds.get(thread));
 
@@ -841,6 +874,7 @@ export namespace Debugger {
         return canYieldAcrossPcall;
     }
 
+    //coroutine.create replacement for hooking threads
     // eslint-disable-next-line @typescript-eslint/ban-types
     function debuggerCoroutineCreate(f: Function, allowBreak: boolean) {
         if (allowBreak && useXpcallInCoroutine()) {
@@ -869,10 +903,13 @@ export namespace Debugger {
         thread: LuaThread,
         ...args: unknown[]
     ): LuaMultiReturn<[true, ...unknown[]] | [false, string]> {
+        const activeThread = getActiveThread();
+        threadStackOffsets.set(activeThread, 1);
         const results = luaCoroutineResume(thread, ...args);
         if (!results[0]) {
             breakForError(results[1], 2);
         }
+        threadStackOffsets.delete(activeThread);
         return results;
     }
 
@@ -881,10 +918,13 @@ export namespace Debugger {
     function debuggerCoroutineWrap(f: Function) {
         const thread = debuggerCoroutineCreate(f, true);
         function resumer(...args: unknown[]) {
+            const activeThread = getActiveThread();
+            threadStackOffsets.set(activeThread, 1);
             const results = luaCoroutineResume(thread, ...args);
             if (!results[0]) {
                 return breakForError(results[1], 1, true);
             }
+            threadStackOffsets.delete(activeThread);
             return luaUnpack(results, 2);
         }
         return resumer;
@@ -911,7 +951,7 @@ export namespace Debugger {
         } else if (hookStack[hookStack.length - 1] === HookType.Global) {
             const info = debug.getinfo(2, "S");
             if (info && info.what === "C") {
-                const thread = isThread(threadOrMessage) ? threadOrMessage : coroutine.running() ?? mainThread;
+                const thread = isThread(threadOrMessage) ? threadOrMessage : getActiveThread();
                 Send.debugBreak(trace, "error", getThreadId(thread));
                 debugBreak(thread, 3);
             }
