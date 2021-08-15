@@ -167,7 +167,7 @@ export namespace Send {
         }
         const builtStrs: string[] = [];
         for (const [_, nameAndDesc] of ipairs(helpStrs)) {
-            const [name, desc] = nameAndDesc;
+            const [name, desc] = unpack(nameAndDesc);
             table.insert(builtStrs, `${name}${string.rep(" ", nameLength - name.length + 1)}: ${desc}`);
         }
         io.write(`${table.concat(builtStrs, "\n")}\n`);

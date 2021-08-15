@@ -38,14 +38,15 @@ declare function loadfile(
     env?: unknown
 ): LuaMultiReturn<[{ (this: void): unknown }, undefined] | [undefined, string]>;
 
+//Set global `unpack` so tstl generated code always has access to it
+_G.unpack ??= (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack;
+
 export const luaAssert = _G.assert;
 export const luaError = _G.error;
 export const luaCoroutineWrap = coroutine.wrap;
 export const luaDebugTraceback = debug.traceback;
 export const luaCoroutineCreate = coroutine.create;
 export const luaCoroutineResume = coroutine.resume;
-// eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-export const luaUnpack = (unpack ?? (table as typeof table & Record<"unpack", typeof _G["unpack"]>).unpack);
 
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 export const luaRawLen = rawlen ?? function<T extends AnyTable>(v: T | string): number {
