@@ -25,62 +25,58 @@ export namespace Message {
         return obj !== null && typeof obj !== "undefined" && (obj as Partial<LuaDebug.Message>).tag === "$luaDebug";
     }
 
-    export function parse(text: string): [LuaDebug.Message[], string, string] {
-        const messages: LuaDebug.Message[] = [];
-        const strs: string[] = [];
-        let strStartIndex = 0;
-        let firstOpenBrace = text.length;
-        for (let openBraceIndex = 0; openBraceIndex < text.length; ++openBraceIndex) {
-            const openBrace = text[openBraceIndex];
-            if (openBrace === "{") {
-                if (firstOpenBrace === text.length) {
-                    firstOpenBrace = openBraceIndex;
+    const startToken: LuaDebug.StartToken = "@lldbg|";
+    const endToken: LuaDebug.EndToken = "|lldbg@";
+
+    interface ParsedInfo {
+        leadingText: string;
+        newPosition: number;
+        message?: LuaDebug.Message;
+    }
+
+    function parseMessage(text: string, position: number): ParsedInfo {
+        const firstStart = text.indexOf(startToken, position);
+        if (firstStart === -1) {
+            return {leadingText: text.substring(position), newPosition: text.length};
+        }
+        let start = firstStart;
+        while (true) {
+            const messageStart = start + (startToken as string).length;
+            let messageEnd = text.indexOf(endToken, messageStart);
+            while (messageEnd >= 0) {
+                const possibleMessage = text.substring(messageStart, messageEnd);
+                let message: unknown;
+                try {
+                    message = JSON.parse(possibleMessage);
+                } catch {
                 }
-                let braceDepth = 0;
-                let inQuote = false;
-                for (let closeBraceIndex = openBraceIndex + 1; closeBraceIndex < text.length; ++closeBraceIndex) {
-                    const nextChar = text[closeBraceIndex];
-                    if (inQuote) {
-                        if (nextChar === "\\") {
-                            ++closeBraceIndex; //Skip escaped character
-                        } else if (nextChar === "\"") {
-                            inQuote = false;
-                        }
-                    } else {
-                        if (nextChar === "\"") {
-                            inQuote = true;
-                        } else if (nextChar === "{") {
-                            ++braceDepth;
-                        } else if (nextChar === "}") {
-                            --braceDepth;
-                            if (braceDepth < 0) {
-                                const possibleMessage = text.substring(openBraceIndex, closeBraceIndex + 1);
-                                let message: unknown;
-                                try {
-                                    message = JSON.parse(possibleMessage);
-                                } catch {
-                                }
-                                if (isMessage(message)) {
-                                    messages.push(message);
-                                    strs.push(text.substring(strStartIndex, openBraceIndex));
-                                    strStartIndex = closeBraceIndex + 1;
-                                    openBraceIndex = closeBraceIndex;
-                                    firstOpenBrace = text.length;
-                                }
-                                break;
-                            }
-                        }
-                    }
+                const end = messageEnd + (endToken as string).length;
+                if (isMessage(message)) {
+                    return {leadingText: text.substring(position, start), newPosition: end, message};
                 }
+                messageEnd = text.indexOf(endToken, end);
+            }
+            start = text.indexOf(startToken, messageStart);
+            if (start < 0) {
+                break;
             }
         }
+        return {leadingText: text.substring(position, firstStart), newPosition: firstStart};
+    }
 
-        //Push out anything before first brace
-        if (firstOpenBrace > strStartIndex) {
-            strs.push(text.substring(strStartIndex, firstOpenBrace));
-            strStartIndex = firstOpenBrace;
+    export function parse(text: string): [LuaDebug.Message[], string, string] {
+        const messages: LuaDebug.Message[] = [];
+        const processed: string[] = [];
+        let position = 0;
+        while (position < text.length) {
+            const result = parseMessage(text, position);
+            processed.push(result.leadingText);
+            position = result.newPosition;
+            if (!result.message) {
+                break;
+            }
+            messages.push(result.message);
         }
-
-        return [messages, strs.join(""), text.substr(strStartIndex)];
+        return [messages, processed.join(""), text.substring(position)];
     }
 }

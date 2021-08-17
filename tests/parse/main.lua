@@ -19,17 +19,25 @@ for i = 1, 5 do
 	print("foo" .. i)
 end
 
-print("{") --Stalls future output unless message is pushed (like hitting a breakpoint)
+print("@lldbg|") --Stalls future output unless message is pushed (like hitting a breakpoint)
 
 for i = 1, 5 do
 	os.execute("sleep 1")
 	print("bar" .. i)
 end
 
-print("{method = \"test\"}")
-print("{{}}")
+print("@lldbg|{method = \"test\"}|lldbg@")
+print("@lldbg|{{}}|lldbg@")
 
-print('{"')
+print("|lldbg@")
+print("|lldbg@")
+print("@lldbg|")
+print("@lldbg|")
+print("|lldbg@")
+print("@lldbg|")
+print("|lldbg@")
+
+print("@lldbg|{")
 local x = 1 --Make sure a breakpoint here will hit
 
 --After resuming breakpoint, these should appear in real-time again

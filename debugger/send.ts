@@ -26,6 +26,9 @@ import {Vars} from "./debugger";
 import {Thread, mainThread, mainThreadName} from "./thread";
 
 export namespace Send {
+    const startToken: LuaDebug.StartToken = "@lldbg|";
+    const endToken: LuaDebug.EndToken = "|lldbg@";
+
     function getPrintableValue(value: unknown) {
         const valueType = type(value);
         if (valueType === "string") {
@@ -59,7 +62,7 @@ export namespace Send {
     }
 
     function send(message: LuaDebug.MessageBase) {
-        io.write(Format.asJson(message));
+        io.write(`${startToken}${Format.asJson(message)}${endToken}`);
     }
 
     export function error(err: string): void {

@@ -108,6 +108,9 @@ declare namespace LuaDebug {
 
     type Message = Error | DebugBreak | Result | Stack | Variables | Properties | Breakpoints | Threads;
 
+    type StartToken = "@lldbg|";
+    type EndToken = "|lldbg@";
+
     type ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
     type BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
 }
