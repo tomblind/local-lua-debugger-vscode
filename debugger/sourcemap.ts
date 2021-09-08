@@ -121,13 +121,12 @@ export namespace SourceMap {
         }
 
         for (const [source] of sources.gmatch('"([^"]+)"')) {
-            let sourcePath: string;
             if (Path.isAbsolute(source)) {
-                sourcePath = source;
+                table.insert(sourceMap.sources, Path.format(source));
             } else {
-                sourcePath = `${mapDir}${Path.separator}${sourceRoot}${Path.separator}${source}`;
+                const sourcePath = `${mapDir}${Path.separator}${sourceRoot}${Path.separator}${source}`;
+                table.insert(sourceMap.sources, Path.getAbsolute(sourcePath));
             }
-            table.insert(sourceMap.sources, Path.getAbsolute(sourcePath));
         }
 
         const [names] = data.match('"names"%s*:%s*(%b[])');
