@@ -1,3 +1,9 @@
+## Version 0.2.3
+- Added support for breaking on implicit errors in coroutines (not supported in Lua 5.1)
+- Global reference to the debugger is now stored in `lldebugger`
+- Fixed handling of sourcemaps with absolute paths
+- Many internal upgrades, fixes, and improvements
+
 ## Version 0.2.2
 - Fixed bug when tostring metamethod has errors
 - Fixed handling of backslashes in args (thanks to ousttrue)
