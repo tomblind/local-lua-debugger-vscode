@@ -68,6 +68,7 @@ const maxStackCount = 100;
 const metatableDisplayName = "[[metatable]]";
 const tableLengthDisplayName = "[[length]]";
 const envVariable = "LOCAL_LUA_DEBUGGER_VSCODE";
+const filePathEnvVariable = "LOCAL_LUA_DEBUGGER_FILEPATH";
 const scriptRootsEnvVariable: LuaDebug.ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
 const breakInCoroutinesEnv: LuaDebug.BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
 
@@ -207,6 +208,8 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         //Set an environment variable so the debugger can detect the attached extension
         processOptions.env[envVariable] = "1";
+        processOptions.env[filePathEnvVariable]
+            = `${this.config.extensionPath}${path.sep}debugger${path.sep}lldebugger.lua`;
 
         //Pass options via environment variables
         if (typeof this.config.scriptRoots !== "undefined") {
