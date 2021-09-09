@@ -686,16 +686,9 @@ export class LuaDebugSession extends LoggingDebugSession {
             return;
         }
 
-        if (path.isAbsolute(filePath)) {
-            if (fs.existsSync(filePath)) {
-                return filePath;
-            } else {
-                return;
-            }
-        }
-
         const config = this.assert(this.config);
-        let fullPath = path.resolve(config.cwd, filePath);
+        let fullPath = path.isAbsolute(filePath) ? filePath : path.join(config.cwd, filePath);
+
         if (fs.existsSync(fullPath)) {
             return fullPath;
         }
@@ -705,9 +698,9 @@ export class LuaDebugSession extends LoggingDebugSession {
         }
         for (const rootPath of config.scriptRoots) {
             if (path.isAbsolute(rootPath)) {
-                fullPath = path.resolve(rootPath, filePath);
+                fullPath = path.join(rootPath, filePath);
             } else {
-                fullPath = path.resolve(config.cwd, rootPath, filePath);
+                fullPath = path.join(config.cwd, rootPath, filePath);
             }
             if (fs.existsSync(fullPath)) {
                 return fullPath;
