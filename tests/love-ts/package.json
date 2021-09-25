@@ -4,12 +4,15 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tstl -p ."
   },
   "author": "",
   "license": "ISC",
   "dependencies": {
+  },
+  "devDependencies": {
     "love-typescript-definitions": "^0.20.2",
-    "lua-types": "^2.8.0"
+    "lua-types": "^2.8.0",
+    "typescript-to-lua": "^1.0.1"
   }
 }
