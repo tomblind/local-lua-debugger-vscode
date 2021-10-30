@@ -33,7 +33,9 @@ io.stderr.setvbuf("no");
 
 //Start debugger globally
 export function start(breakImmediately?: boolean): void {
-    breakImmediately ||= os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") === "1";
+    if (breakImmediately === undefined) {
+        breakImmediately = (os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") === "1");
+    }
     Debugger.debugGlobal(breakImmediately);
 }
 
