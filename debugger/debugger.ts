@@ -781,23 +781,25 @@ export namespace Debugger {
             return;
         }
 
-        if (!topFrame) {
-            topFrame = debug.getinfo(debugHookStackOffset, "l");
-            if (!topFrame) {
-                return;
+        if (line === undefined) {
+            if (topFrame && topFrame.currentline) {
+                line = topFrame.currentline;
+            } else {
+                const topFrameLineOnly = debug.getinfo(debugHookStackOffset, "l");
+                if (!topFrameLineOnly || !topFrameLineOnly.currentline) {
+                    return;
+                }
+                line = topFrameLineOnly.currentline;
             }
-        }
-        if (!topFrame.currentline) {
-            return;
         }
 
         const breakpoints = Breakpoint.getAll();
-        const lineBreakpoints = breakpoints[topFrame.currentline];
+        const lineBreakpoints = breakpoints[line];
         if (!lineBreakpoints) {
             return;
         }
 
-        if (!topFrame.source) {
+        if (!topFrame) {
             topFrame = debug.getinfo(debugHookStackOffset, "nSluf");
             if (!topFrame || !topFrame.source) {
                 return;

@@ -128,7 +128,7 @@
         "@typescript-eslint/no-unused-vars": ["warn", {"args": "none", "varsIgnorePattern": "^_+$"}],
         "@typescript-eslint/prefer-for-of": "warn",
         "@typescript-eslint/prefer-nullish-coalescing": "off",
-        "@typescript-eslint/prefer-optional-chain": "warn",
+        "@typescript-eslint/prefer-optional-chain": "off",
         "@typescript-eslint/prefer-readonly": "warn",
         "@typescript-eslint/prefer-regexp-exec": "off",
         "@typescript-eslint/strict-boolean-expressions": ["warn", {"allowString": true, "allowNumber": true, "allowNullableBoolean": true, "allowNullableNumber": true, "allowNullableString": true, "allowNullableObject": true, "allowAny": true}],
