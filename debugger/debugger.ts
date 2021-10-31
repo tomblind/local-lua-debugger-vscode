@@ -624,10 +624,10 @@ export namespace Debugger {
 
                 } else if (cmd === "clear") {
                     Breakpoint.clear();
-                    Send.breakpoints(Breakpoint.getAll());
+                    Send.breakpoints(Breakpoint.getList());
 
                 } else if (cmd === "list") {
-                    Send.breakpoints(Breakpoint.getAll());
+                    Send.breakpoints(Breakpoint.getList());
 
                 } else {
                     Send.error("Bad breakpoint command");
@@ -719,12 +719,12 @@ export namespace Debugger {
         }
     }
 
-    function checkBreakpoint(breakpoint: LuaDebug.Breakpoint, file: string, line: number, sourceMap?: SourceMap) {
-        if (breakpoint.line === line && comparePaths(breakpoint.file, file)) {
+    function checkBreakpoint(breakpoint: LuaDebug.Breakpoint, file: string, sourceMap?: SourceMap) {
+        if (comparePaths(breakpoint.file, file)) {
             return true;
         }
         if (sourceMap) {
-            const lineMapping = sourceMap[line];
+            const lineMapping = sourceMap[breakpoint.line];
             if (lineMapping && lineMapping.sourceLine === breakpoint.line) {
                 const sourceMapFile = sourceMap.sources[lineMapping.sourceIndex];
                 if (sourceMapFile) {
@@ -735,54 +735,85 @@ export namespace Debugger {
         return false;
     }
 
+    const debugHookStackOffset = 2;
+
     function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
-        const stackOffset = 2;
-
-        //Ignore debugger code
-        const topFrame = debug.getinfo(stackOffset, "nSluf");
-        if (!topFrame || !topFrame.source || topFrame.source.sub(-debuggerName.length) === debuggerName) {
-            return;
-        }
-
-        //Ignore builtin lua functions (luajit)
-        if (topFrame.short_src && topFrame.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix) {
-            return;
-        }
-
-        const activeThread = getActiveThread();
+        let topFrame: debug.FunctionInfo | undefined;
+        let activeThread: LuaThread | typeof mainThread;
 
         //Stepping
         if (breakAtDepth >= 0) {
+            activeThread = getActiveThread();
+
             let stepBreak: boolean;
             if (breakInThread === undefined) {
                 stepBreak = true;
             } else if (activeThread === breakInThread) {
-                stepBreak = getStack(stackOffset).length <= breakAtDepth;
+                stepBreak = getStack(debugHookStackOffset).length <= breakAtDepth;
             } else {
                 stepBreak = breakInThread !== mainThread && coroutine.status(breakInThread as LuaThread) === "dead";
             }
             if (stepBreak) {
+                topFrame = debug.getinfo(debugHookStackOffset, "nSluf");
+                if (!topFrame || !topFrame.source || !topFrame.short_src) {
+                    return;
+                }
+
+                //Ignore debugger code
+                if (topFrame.source.sub(-debuggerName.length) === debuggerName) {
+                    return;
+                }
+
+                //Ignore builtin lua functions (luajit)
+                if (topFrame.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix) {
+                    return;
+                }
+
                 Send.debugBreak("step", "step", getThreadId(activeThread));
-                if (debugBreak(activeThread, stackOffset)) {
+                if (debugBreak(activeThread, debugHookStackOffset)) {
                     return;
                 }
             }
         }
 
         //Breakpoints
-        const breakpoints = Breakpoint.getAll();
-        if (!topFrame.currentline || breakpoints.length === 0) {
+        if (Breakpoint.getCount() === 0) {
             return;
         }
 
+        if (!topFrame) {
+            topFrame = debug.getinfo(debugHookStackOffset, "l");
+            if (!topFrame) {
+                return;
+            }
+        }
+        if (!topFrame.currentline) {
+            return;
+        }
+
+        const breakpoints = Breakpoint.getAll();
+        const lineBreakpoints = breakpoints[topFrame.currentline];
+        if (!lineBreakpoints) {
+            return;
+        }
+
+        if (!topFrame.source) {
+            topFrame = debug.getinfo(debugHookStackOffset, "nSluf");
+            if (!topFrame || !topFrame.source) {
+                return;
+            }
+        }
+
+        activeThread = getActiveThread();
+
         const source = Path.format(luaAssert(topFrame.source));
         const sourceMap = SourceMap.get(source);
-        for (const breakpoint of breakpoints) {
-            if (breakpoint.enabled && checkBreakpoint(breakpoint, source, topFrame.currentline, sourceMap)) {
+        for (const breakpoint of lineBreakpoints) {
+            if (breakpoint.enabled && checkBreakpoint(breakpoint, source, sourceMap)) {
                 if (breakpoint.condition) {
                     const mappedCondition = mapExpressionNames(breakpoint.condition, sourceMap);
                     const condition = `return ${mappedCondition}`;
-                    const [success, result] = execute(condition, stackOffset, topFrame);
+                    const [success, result] = execute(condition, debugHookStackOffset, topFrame);
                     if (success && result) {
                         const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
                         Send.debugBreak(
@@ -790,7 +821,7 @@ export namespace Debugger {
                             "breakpoint",
                             getThreadId(activeThread)
                         );
-                        debugBreak(activeThread, stackOffset);
+                        debugBreak(activeThread, debugHookStackOffset);
                         break;
                     }
                 } else {
@@ -799,7 +830,7 @@ export namespace Debugger {
                         "breakpoint",
                         getThreadId(activeThread)
                     );
-                    debugBreak(activeThread, stackOffset);
+                    debugBreak(activeThread, debugHookStackOffset);
                     break;
                 }
             }

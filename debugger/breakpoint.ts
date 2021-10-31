@@ -23,38 +23,74 @@
 import {Path} from "./path";
 
 export namespace Breakpoint {
-    let current: LuaDebug.Breakpoint[] = [];
+    export interface BreakpointSet {
+        [line: number]: LuaDebug.Breakpoint[] | undefined;
+    }
+
+    let current: BreakpointSet = {};
+    let count = 0;
 
     export function get(file: string, line: number): LuaDebug.Breakpoint | undefined {
-        file = Path.format(file);
-        for (const [_, breakpoint] of ipairs(current)) {
-            if (breakpoint.file === file && breakpoint.line === line) {
-                return breakpoint;
+        const lineBreakpoints = current[line];
+        if (lineBreakpoints) {
+            file = Path.format(file);
+            for (const [_, breakpoint] of ipairs(lineBreakpoints)) {
+                if (breakpoint.file === file) {
+                    return breakpoint;
+                }
             }
         }
         return undefined;
     }
 
-    export function getAll(): LuaDebug.Breakpoint[] {
+    export function getAll(): BreakpointSet {
         return current;
     }
 
+    export function getList(): LuaDebug.Breakpoint[] {
+        const breakpointList: LuaDebug.Breakpoint[] = [];
+        for (const [_, lineBreakpoints] of pairs(current)) {
+            for (const [__, breakpoint] of ipairs(lineBreakpoints)) {
+                table.insert(breakpointList, breakpoint);
+            }
+        }
+        return breakpointList;
+    }
+
     export function add(file: string, line: number, condition?: string): void {
-        table.insert(current, {file: Path.format(file), line, enabled: true, condition});
+        let lineBreakpoints = current[line];
+        if (!lineBreakpoints) {
+            lineBreakpoints = [];
+            current[line] = lineBreakpoints;
+        }
+        table.insert(lineBreakpoints, {file: Path.format(file), line, enabled: true, condition});
+        ++count;
     }
 
     export function remove(file: string, line: number): void {
+        const lineBreakpoints = current[line];
+        if (!lineBreakpoints) {
+            return;
+        }
         file = Path.format(file);
-        for (const [i, breakpoint] of ipairs(current)) {
-            if (breakpoint.file === file && breakpoint.line === line) {
-                table.remove(current, i);
+        for (const [i, breakpoint] of ipairs(lineBreakpoints)) {
+            if (breakpoint.file === file) {
+                table.remove(lineBreakpoints, i);
+                --count;
+                if (lineBreakpoints.length === 0) {
+                    current[line] = undefined;
+                }
                 break;
             }
         }
     }
 
     export function clear(): void {
-        current = [];
+        current = {};
+        count = 0;
+    }
+
+    export function getCount(): number {
+        return count;
     }
 }
-
