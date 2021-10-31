@@ -711,15 +711,25 @@ export namespace Debugger {
     }
 
     function comparePaths(a: string, b: string) {
-        const aLen = a.length;
+        let aLen = a.length;
         const bLen = b.length;
         if (aLen === bLen) {
             return a === b;
-        } else if (aLen < bLen) {
-            return Path.separator + a === b.sub(-(aLen + 1));
-        } else {
-            return Path.separator + b === a.sub(-(bLen + 1));
         }
+        //Ensure 'a' is the shorter path
+        if (bLen < aLen) {
+            [a, aLen, b] = [b, bLen, a];
+        }
+        if (a !== b.sub(-aLen)) {
+            return false;
+        }
+        //If shorter string doesn't start with '/', make sure the longer one has '/' right before the substring
+        //so we don't match a partial filename.
+        if (a.sub(1, 1) === Path.separator) {
+            return true;
+        }
+        const bSep = -(aLen + 1);
+        return b.sub(bSep, bSep) === Path.separator;
     }
 
     function checkBreakpoint(breakpoint: LuaDebug.Breakpoint, file: string, sourceMap?: SourceMap) {

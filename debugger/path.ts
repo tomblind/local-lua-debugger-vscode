@@ -81,7 +81,8 @@ export namespace Path {
                     }
                 }
             }
-            formattedPath = `${drive}${table.concat(pathParts, separator)}`;
+            const [formattedDrive] = drive.gsub("[\\/]+", separator);
+            formattedPath = `${formattedDrive}${table.concat(pathParts, separator)}`;
             formattedPathCache[path] = formattedPath;
         }
         return formattedPath;
