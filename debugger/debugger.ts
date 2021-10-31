@@ -414,6 +414,7 @@ export namespace Debugger {
 
     let breakAtDepth = -1;
     let breakInThread: Thread | undefined;
+    let updateHook: { (): void };
 
     function debugBreak(activeThread: Thread, stackOffset: number) {
         ++stackOffset;
@@ -438,6 +439,7 @@ export namespace Debugger {
                 break;
 
             } else if (inp === "autocont" || inp === "autocontinue") {
+                updateHook();
                 return false; //Check breakpoints before resuming
 
             } else if (inp === "help") {
@@ -704,6 +706,7 @@ export namespace Debugger {
             }
         }
 
+        updateHook();
         return true; //Resume execution immediately without checking breakpoints
     }
 
@@ -1018,6 +1021,26 @@ export namespace Debugger {
         }
     }
 
+    updateHook = function() {
+        if (breakAtDepth < 0 && Breakpoint.getCount() === 0) {
+            debug.sethook();
+
+            for (const [thread] of pairs(threadIds)) {
+                if (isThread(thread) && coroutine.status(thread) !== "dead") {
+                    debug.sethook(thread);
+                }
+            }
+        } else {
+            debug.sethook(debugHook, "l");
+
+            for (const [thread] of pairs(threadIds)) {
+                if (isThread(thread) && coroutine.status(thread) !== "dead") {
+                    debug.sethook(thread, debugHook, "l");
+                }
+            }
+        }
+    };
+
     export function clearHook(): void {
         while (hookStack.length > 0) {
             table.remove(hookStack);
@@ -1060,13 +1083,7 @@ export namespace Debugger {
             registerThread(currentThread);
         }
 
-        debug.sethook(debugHook, "l");
-
-        for (const [thread] of pairs(threadIds)) {
-            if (isThread(thread) && coroutine.status(thread) !== "dead") {
-                debug.sethook(thread, debugHook, "l");
-            }
-        }
+        updateHook();
     }
 
     export function popHook(): void {
@@ -1075,11 +1092,13 @@ export namespace Debugger {
             clearHook();
         } else {
             setErrorHandler();
+            updateHook();
         }
     }
 
     export function triggerBreak(): void {
         breakAtDepth = math.huge;
+        updateHook();
     }
 
     export function debugGlobal(breakImmediately?: boolean): void {
