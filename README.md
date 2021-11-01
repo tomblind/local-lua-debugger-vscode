@@ -82,8 +82,13 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 - Some custom environments will not break on uncaught runtime errors. To catch a runtime error, you can wrap the code with `lldebugger.call()`:
     ```lua
     lldebugger.call(function()
-      --code causing runtime error
+    --code causing runtime error
     end)
+    ```
+- Some environments will not load required files from the standard filesystem. In these cases, you may be able to load the debugger manually using the file path stored in `LOCAL_LUA_DEBUGGER_FILEPATH`:
+    ```lua
+    package.loaded["lldebugger"] = assert(loadfile(os.getenv("LOCAL_LUA_DEBUGGER_FILEPATH")))()
+    require("lldebugger").start()
     ```
 
 ---
