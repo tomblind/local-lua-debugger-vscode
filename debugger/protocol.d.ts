@@ -113,4 +113,5 @@ declare namespace LuaDebug {
 
     type ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
     type BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
+    type IgnorePatternsEnv = "LOCAL_LUA_DEBUGGER_IGNORE_PATTERNS";
 }

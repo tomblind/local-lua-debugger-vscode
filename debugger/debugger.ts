@@ -750,6 +750,25 @@ export namespace Debugger {
 
     const debugHookStackOffset = 2;
 
+    const ignorePatternsEnv: LuaDebug.IgnorePatternsEnv = "LOCAL_LUA_DEBUGGER_IGNORE_PATTERNS";
+    const ignorePatterns: string[] = [];
+    const ignorePatternsStr = os.getenv(ignorePatternsEnv);
+    if (ignorePatternsStr) {
+        for (const [pattern] of ignorePatternsStr.gmatch("[^;]+")) {
+            table.insert(ignorePatterns, pattern);
+        }
+    }
+
+    function matchesIgnorePattern(path: string) {
+        for (const pattern of ignorePatterns) {
+            const [match] = path.match(pattern);
+            if (match) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
         let topFrame: debug.FunctionInfo | undefined;
         let activeThread: LuaThread | typeof mainThread;
@@ -768,23 +787,22 @@ export namespace Debugger {
             }
             if (stepBreak) {
                 topFrame = debug.getinfo(debugHookStackOffset, "nSluf");
-                if (!topFrame || !topFrame.source || !topFrame.short_src) {
+                if (!topFrame || !topFrame.source) {
                     return;
                 }
 
-                //Ignore debugger code
-                if (topFrame.source.sub(-debuggerName.length) === debuggerName) {
-                    return;
-                }
-
-                //Ignore builtin lua functions (luajit)
-                if (topFrame.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix) {
-                    return;
-                }
-
-                Send.debugBreak("step", "step", getThreadId(activeThread));
-                if (debugBreak(activeThread, debugHookStackOffset)) {
-                    return;
+                if (
+                    //Ignore debugger code
+                    topFrame.source.sub(-debuggerName.length) !== debuggerName
+                    //Ignore builtin lua functions (luajit)
+                    && topFrame.short_src
+                    && topFrame.short_src.sub(1, builtinFunctionPrefix.length) !== builtinFunctionPrefix
+                    && !matchesIgnorePattern(topFrame.source)
+                ) {
+                    Send.debugBreak("step", "step", getThreadId(activeThread));
+                    if (debugBreak(activeThread, debugHookStackOffset)) {
+                        return;
+                    }
                 }
             }
         }

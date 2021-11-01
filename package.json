@@ -105,6 +105,13 @@
                 "configurationAttributes": {
                     "launch": {
                         "properties": {
+                            "ignorePatterns": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Lua patterns of file paths which should be ignored when stepping"
+                            },
                             "scriptRoots": {
                                 "type": "array",
                                 "items": {

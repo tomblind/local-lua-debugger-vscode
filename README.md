@@ -92,6 +92,10 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 
 A list of alternate paths to find lua scripts. This is useful for environments like LÖVE, which use custom resolvers to find scripts in other locations than what is in `package.config`.
 
+#### `ignorePatterns`
+
+A list of [lua patterns](https://www.lua.org/manual/5.4/manual.html#6.4.1) that specifies files to skip over when stepping through code. Any file path that matches one of the patterns will be silently stepped over.
+
 #### `breakInCoroutines`
 
 Break into the debugger when errors occur inside coroutines.
