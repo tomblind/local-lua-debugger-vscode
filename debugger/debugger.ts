@@ -732,27 +732,46 @@ export namespace Debugger {
         return b.sub(bSep, bSep) === Path.separator;
     }
 
-    function checkBreakpoint(breakpoint: LuaDebug.Breakpoint, file: string, sourceMap?: SourceMap) {
-        if (comparePaths(breakpoint.file, file)) {
-            return true;
-        }
-        if (sourceMap) {
-            const lineMapping = sourceMap[breakpoint.line];
-            if (lineMapping && lineMapping.sourceLine === breakpoint.line) {
-                const sourceMapFile = sourceMap.sources[lineMapping.sourceIndex];
-                if (sourceMapFile) {
-                    return comparePaths(breakpoint.file, sourceMapFile);
+    const debugHookStackOffset = 2;
+
+    function checkBreakpoints(lineBreakpoints: LuaDebug.Breakpoint[], source: string, sourceMap?: SourceMap) {
+        let topFrame: debug.FunctionInfo | undefined;
+        for (const breakpoint of lineBreakpoints) {
+            if (breakpoint.enabled && comparePaths(breakpoint.file, source)) {
+                if (breakpoint.condition) {
+                    const mappedCondition = mapExpressionNames(breakpoint.condition, sourceMap);
+                    const condition = `return ${mappedCondition}`;
+                    topFrame = topFrame || luaAssert(debug.getinfo(debugHookStackOffset + 1, "nSluf"));
+                    const [success, result] = execute(condition, debugHookStackOffset + 1, topFrame);
+                    if (success && result) {
+                        const activeThread = getActiveThread();
+                        const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
+                        Send.debugBreak(
+                            `breakpoint hit: "${breakpoint.file}:${breakpoint.line}", ${conditionDisplay}`,
+                            "breakpoint",
+                            getThreadId(activeThread)
+                        );
+                        debugBreak(activeThread, debugHookStackOffset + 1);
+                        return true;
+                    }
+                } else {
+                    const activeThread = getActiveThread();
+                    Send.debugBreak(
+                        `breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`,
+                        "breakpoint",
+                        getThreadId(activeThread)
+                    );
+                    debugBreak(activeThread, debugHookStackOffset + 1);
+                    return true;
                 }
             }
         }
         return false;
     }
 
-    const debugHookStackOffset = 2;
-
     function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
-        let topFrame: debug.FunctionInfo | undefined;
-        let activeThread: LuaThread | typeof mainThread;
+        let source: string | undefined;
+        let activeThread: LuaThread | typeof mainThread | undefined;
 
         //Stepping
         if (breakAtDepth >= 0) {
@@ -767,18 +786,22 @@ export namespace Debugger {
                 stepBreak = breakInThread !== mainThread && coroutine.status(breakInThread as LuaThread) === "dead";
             }
             if (stepBreak) {
-                topFrame = debug.getinfo(debugHookStackOffset, "nSluf");
-                if (!topFrame || !topFrame.source || !topFrame.short_src) {
+                const topFrame = debug.getinfo(debugHookStackOffset, "S");
+                if (!topFrame || !topFrame.source) {
                     return;
                 }
+                source = topFrame.source;
 
                 //Ignore debugger code
-                if (topFrame.source.sub(-debuggerName.length) === debuggerName) {
+                if (source.sub(-debuggerName.length) === debuggerName) {
                     return;
                 }
 
                 //Ignore builtin lua functions (luajit)
-                if (topFrame.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix) {
+                if (
+                    topFrame.short_src
+                    && topFrame.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix
+                ) {
                     return;
                 }
 
@@ -794,59 +817,34 @@ export namespace Debugger {
             return;
         }
 
-        if (line === undefined) {
-            if (topFrame && topFrame.currentline) {
-                line = topFrame.currentline;
-            } else {
-                const topFrameLineOnly = debug.getinfo(debugHookStackOffset, "l");
-                if (!topFrameLineOnly || !topFrameLineOnly.currentline) {
-                    return;
-                }
-                line = topFrameLineOnly.currentline;
-            }
-        }
-
         const breakpoints = Breakpoint.getAll();
-        const lineBreakpoints = breakpoints[line];
-        if (!lineBreakpoints) {
-            return;
-        }
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        let lineBreakpoints = breakpoints[line!];
+        // if (!lineBreakpoints) {
+        //     return;
+        // }
 
-        if (!topFrame) {
-            topFrame = debug.getinfo(debugHookStackOffset, "nSluf");
+        if (!source) {
+            const topFrame = debug.getinfo(debugHookStackOffset, "S");
             if (!topFrame || !topFrame.source) {
                 return;
             }
+            source = topFrame.source;
         }
 
-        activeThread = getActiveThread();
+        if (lineBreakpoints && checkBreakpoints(lineBreakpoints, source)) {
+            return;
+        }
 
-        const source = Path.format(luaAssert(topFrame.source));
-        const sourceMap = SourceMap.get(source);
-        for (const breakpoint of lineBreakpoints) {
-            if (breakpoint.enabled && checkBreakpoint(breakpoint, source, sourceMap)) {
-                if (breakpoint.condition) {
-                    const mappedCondition = mapExpressionNames(breakpoint.condition, sourceMap);
-                    const condition = `return ${mappedCondition}`;
-                    const [success, result] = execute(condition, debugHookStackOffset, topFrame);
-                    if (success && result) {
-                        const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
-                        Send.debugBreak(
-                            `breakpoint hit: "${breakpoint.file}:${breakpoint.line}", ${conditionDisplay}`,
-                            "breakpoint",
-                            getThreadId(activeThread)
-                        );
-                        debugBreak(activeThread, debugHookStackOffset);
-                        break;
-                    }
-                } else {
-                    Send.debugBreak(
-                        `breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`,
-                        "breakpoint",
-                        getThreadId(activeThread)
-                    );
-                    debugBreak(activeThread, debugHookStackOffset);
-                    break;
+        const formattedSource = Path.format(source);
+        const sourceMap = SourceMap.get(formattedSource);
+        if (sourceMap) {
+            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+            const mapping = sourceMap[line!];
+            if (mapping) {
+                lineBreakpoints = breakpoints[mapping.sourceLine];
+                if (lineBreakpoints) {
+                    checkBreakpoints(lineBreakpoints, luaAssert(sourceMap.sources[mapping.sourceIndex]), sourceMap);
                 }
             }
         }
