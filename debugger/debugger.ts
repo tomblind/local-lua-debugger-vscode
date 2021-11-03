@@ -95,7 +95,7 @@ export namespace Debugger {
             if (info.source && info.currentline) {
                 const sourceMap = SourceMap.get(frame.source);
                 if (sourceMap) {
-                    const lineMapping = sourceMap[frame.line];
+                    const lineMapping = sourceMap.mappings[frame.line];
                     if (lineMapping) {
                         frame.mappedLocation = {
                             source: luaAssert(sourceMap.sources[lineMapping.sourceIndex]),
@@ -467,7 +467,8 @@ export namespace Debugger {
                     ["break list", "show all breakpoints"],
                     ["break clear", "delete all breakpoints"],
                     ["threads", "list active thread ids"],
-                    ["thread n", "set current thread by id"]
+                    ["thread n", "set current thread by id"],
+                    ["script", "add known script file (pre-caches sourcemap for breakpoint)"]
                 );
 
             } else if (inp === "threads") {
@@ -626,10 +627,10 @@ export namespace Debugger {
 
                 } else if (cmd === "clear") {
                     Breakpoint.clear();
-                    Send.breakpoints(Breakpoint.getList());
+                    Send.breakpoints(Breakpoint.getAll());
 
                 } else if (cmd === "list") {
-                    Send.breakpoints(Breakpoint.getList());
+                    Send.breakpoints(Breakpoint.getAll());
 
                 } else {
                     Send.error("Bad breakpoint command");
@@ -701,6 +702,20 @@ export namespace Debugger {
                     }
                 }
 
+            } else if (inp.sub(1, 6) === "script") {
+                const [scriptFile] = inp.match("^script%s+(.+)$");
+                if (!scriptFile) {
+                    Send.error("Bad script file");
+
+                } else {
+                    const foundSourceMap = SourceMap.get(scriptFile);
+                    if (foundSourceMap) {
+                        Send.result(`added ${scriptFile}: source map found`);
+                    } else {
+                        Send.result(`added ${scriptFile}: source map NOT found!`);
+                    }
+                }
+
             } else {
                 Send.error("Bad command");
             }
@@ -733,49 +748,12 @@ export namespace Debugger {
     }
 
     const debugHookStackOffset = 2;
-
-    function checkBreakpoints(lineBreakpoints: LuaDebug.Breakpoint[], source: string, sourceMap?: SourceMap) {
-        let topFrame: debug.FunctionInfo | undefined;
-        for (const breakpoint of lineBreakpoints) {
-            if (breakpoint.enabled && comparePaths(breakpoint.file, source)) {
-                if (breakpoint.condition) {
-                    const mappedCondition = mapExpressionNames(breakpoint.condition, sourceMap);
-                    const condition = `return ${mappedCondition}`;
-                    topFrame = topFrame || luaAssert(debug.getinfo(debugHookStackOffset + 1, "nSluf"));
-                    const [success, result] = execute(condition, debugHookStackOffset + 1, topFrame);
-                    if (success && result) {
-                        const activeThread = getActiveThread();
-                        const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
-                        Send.debugBreak(
-                            `breakpoint hit: "${breakpoint.file}:${breakpoint.line}", ${conditionDisplay}`,
-                            "breakpoint",
-                            getThreadId(activeThread)
-                        );
-                        debugBreak(activeThread, debugHookStackOffset + 1);
-                        return true;
-                    }
-                } else {
-                    const activeThread = getActiveThread();
-                    Send.debugBreak(
-                        `breakpoint hit: "${breakpoint.file}:${breakpoint.line}"`,
-                        "breakpoint",
-                        getThreadId(activeThread)
-                    );
-                    debugBreak(activeThread, debugHookStackOffset + 1);
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
+    const breakpointLookup = Breakpoint.getLookup();
 
     function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
-        let source: string | undefined;
-        let activeThread: LuaThread | typeof mainThread | undefined;
-
         //Stepping
         if (breakAtDepth >= 0) {
-            activeThread = getActiveThread();
+            const activeThread = getActiveThread();
 
             let stepBreak: boolean;
             if (breakInThread === undefined) {
@@ -786,21 +764,20 @@ export namespace Debugger {
                 stepBreak = breakInThread !== mainThread && coroutine.status(breakInThread as LuaThread) === "dead";
             }
             if (stepBreak) {
-                const topFrame = debug.getinfo(debugHookStackOffset, "S");
-                if (!topFrame || !topFrame.source) {
+                const topFrameSource = debug.getinfo(debugHookStackOffset, "S");
+                if (!topFrameSource || !topFrameSource.source) {
                     return;
                 }
-                source = topFrame.source;
 
                 //Ignore debugger code
-                if (source.sub(-debuggerName.length) === debuggerName) {
+                if (topFrameSource.source.sub(-debuggerName.length) === debuggerName) {
                     return;
                 }
 
                 //Ignore builtin lua functions (luajit)
                 if (
-                    topFrame.short_src
-                    && topFrame.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix
+                    topFrameSource.short_src
+                    && topFrameSource.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix
                 ) {
                     return;
                 }
@@ -813,38 +790,54 @@ export namespace Debugger {
         }
 
         //Breakpoints
-        if (Breakpoint.getCount() === 0) {
-            return;
-        }
-
-        const breakpoints = Breakpoint.getAll();
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        let lineBreakpoints = breakpoints[line!];
-        // if (!lineBreakpoints) {
-        //     return;
-        // }
-
-        if (!source) {
-            const topFrame = debug.getinfo(debugHookStackOffset, "S");
-            if (!topFrame || !topFrame.source) {
-                return;
-            }
-            source = topFrame.source;
-        }
-
-        if (lineBreakpoints && checkBreakpoints(lineBreakpoints, source)) {
+        const lineBreakpoints = breakpointLookup[line!];
+        if (!lineBreakpoints) {
             return;
         }
 
-        const formattedSource = Path.format(source);
-        const sourceMap = SourceMap.get(formattedSource);
-        if (sourceMap) {
-            // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-            const mapping = sourceMap[line!];
-            if (mapping) {
-                lineBreakpoints = breakpoints[mapping.sourceLine];
-                if (lineBreakpoints) {
-                    checkBreakpoints(lineBreakpoints, luaAssert(sourceMap.sources[mapping.sourceIndex]), sourceMap);
+        let topFrame = debug.getinfo(debugHookStackOffset, "S");
+        if (!topFrame || !topFrame.source) {
+            return;
+        }
+        const source = Path.format(topFrame.source);
+        topFrame = undefined;
+
+        for (const breakpoint of lineBreakpoints) {
+            if (breakpoint.enabled && comparePaths(breakpoint.file, source)) {
+                if (breakpoint.condition) {
+                    const mappedCondition = mapExpressionNames(breakpoint.condition, breakpoint.sourceMap);
+                    const condition = `return ${mappedCondition}`;
+                    topFrame = topFrame || luaAssert(debug.getinfo(debugHookStackOffset, "nSluf"));
+                    const [success, result] = execute(condition, debugHookStackOffset, topFrame);
+                    if (success && result) {
+                        const activeThread = getActiveThread();
+                        const conditionDisplay = `"${breakpoint.condition}" = "${result}"`;
+                        const [breakpointFile, breakpointLine] = [
+                            breakpoint.sourceFile || breakpoint.file,
+                            breakpoint.sourceLine || breakpoint.line
+                        ];
+                        Send.debugBreak(
+                            `breakpoint hit: "${breakpointFile}:${breakpointLine}", ${conditionDisplay}`,
+                            "breakpoint",
+                            getThreadId(activeThread)
+                        );
+                        debugBreak(activeThread, debugHookStackOffset);
+                        break;
+                    }
+                } else {
+                    const activeThread = getActiveThread();
+                    const [breakpointFile, breakpointLine] = [
+                        breakpoint.sourceFile || breakpoint.file,
+                        breakpoint.sourceLine || breakpoint.line
+                    ];
+                    Send.debugBreak(
+                        `breakpoint hit: "${breakpointFile}:${breakpointLine}"`,
+                        "breakpoint",
+                        getThreadId(activeThread)
+                    );
+                    debugBreak(activeThread, debugHookStackOffset);
+                    break;
                 }
             }
         }
@@ -855,7 +848,7 @@ export namespace Debugger {
         const sourceMap = SourceMap.get(file);
         if (sourceMap) {
             const line = luaAssert(tonumber(lineStr));
-            const lineMapping = sourceMap[line];
+            const lineMapping = sourceMap.mappings[line];
             if (lineMapping) {
                 const sourceFile = sourceMap.sources[lineMapping.sourceIndex];
                 const sourceLine = lineMapping.sourceLine;

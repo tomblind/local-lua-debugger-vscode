@@ -24,6 +24,7 @@ import {luaRawLen} from "./luafuncs";
 import {Format} from "./format";
 import {Vars} from "./debugger";
 import {Thread, mainThread, mainThreadName} from "./thread";
+import { Breakpoint } from "./breakpoint";
 
 export namespace Send {
     const startToken: LuaDebug.StartToken = "@lldbg|";
@@ -154,11 +155,23 @@ export namespace Send {
         send(dbgProperties);
     }
 
-    export function breakpoints(breaks: LuaDebug.Breakpoint[]): void {
+    export function breakpoints(breaks: Breakpoint[]): void {
+        const breakpointList: LuaDebug.Breakpoint[] = [];
+        for (const breakpoint of breaks) {
+            table.insert(
+                breakpointList,
+                {
+                    line: breakpoint.sourceLine || breakpoint.line,
+                    file: breakpoint.sourceFile || breakpoint.file,
+                    condition: breakpoint.condition,
+                    enabled: breakpoint.enabled
+                }
+            );
+        }
         const dbgBreakpoints: LuaDebug.Breakpoints = {
             tag: "$luaDebug",
             type: "breakpoints",
-            breakpoints: Format.makeExplicitArray(breaks)
+            breakpoints: Format.makeExplicitArray(breakpointList)
         };
         send(dbgBreakpoints);
     }

@@ -135,6 +135,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private readonly messageHandlerQueue: MessageHandler[] = [];
     private readonly variableHandles = new Handles<string>(ScopeType.Global + 1);
     private breakpointsPending = false;
+    private pendingScripts: string[] | null = null;
     private autoContinueNext = false;
     private readonly activeThreads = new Map<number, Thread>();
     private isRunning = false;
@@ -183,6 +184,10 @@ export class LuaDebugSession extends LoggingDebugSession {
     ): Promise<void> {
         this.config = args;
         this.autoContinueNext = this.config.stopOnEntry !== true;
+        this.pendingScripts = [
+            "main.lua",
+            "C:\\Users\\tomb\\projects\\local-lua-debugger-vscode\\tests\\sourcemaps\\lua\\sub\\sub.lua"
+        ];
 
         this.showOutput("launchRequest", OutputCategory.Request);
 
@@ -739,6 +744,16 @@ export class LuaDebugSession extends LoggingDebugSession {
 
     private async onDebuggerStop(msg: LuaDebug.DebugBreak) {
         this.isRunning = false;
+
+        if (this.pendingScripts) {
+            for (const scriptFile of this.pendingScripts) {
+                const resultMsg = await this.waitForCommandResponse(`script ${scriptFile}`);
+                if (resultMsg.type === "result" && typeof resultMsg.result.value !== "undefined") {
+                    this.showOutput(resultMsg.result.value, OutputCategory.Info);
+                }
+            }
+            this.pendingScripts = null;
+        }
 
         if (this.breakpointsPending) {
             this.breakpointsPending = false;

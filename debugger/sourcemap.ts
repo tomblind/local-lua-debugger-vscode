@@ -30,7 +30,7 @@ export interface SourceLineMapping {
 }
 
 export interface SourceMap {
-    [line: number]: SourceLineMapping | undefined;
+    mappings: { [line: number]: SourceLineMapping | undefined };
     sources: string[];
     sourceNames: Record<string, string>;
     luaNames: Record<string, string>;
@@ -113,7 +113,7 @@ export namespace SourceMap {
             return undefined;
         }
 
-        const sourceMap: SourceMap = {sources: [], sourceNames: {}, luaNames: {}, hasMappedNames: false};
+        const sourceMap: SourceMap = {mappings: {}, sources: [], sourceNames: {}, luaNames: {}, hasMappedNames: false};
 
         let [sourceRoot] = data.match('"sourceRoot"%s*:%s*"([^"]+)"');
         if (sourceRoot === undefined || sourceRoot.length === 0) {
@@ -179,12 +179,12 @@ export namespace SourceMap {
                     }
                 }
 
-                const lineMapping = sourceMap[line];
+                const lineMapping = sourceMap.mappings[line];
                 if (!lineMapping
                     || sourceLine < lineMapping.sourceLine
                     || (sourceLine === lineMapping.sourceLine && sourceColumn < lineMapping.sourceColumn)
                 ) {
-                    sourceMap[line] = {sourceIndex, sourceLine, sourceColumn};
+                    sourceMap.mappings[line] = {sourceIndex, sourceLine, sourceColumn};
                 }
             }
 
@@ -277,5 +277,18 @@ export namespace SourceMap {
         if (sourceMap !== false) {
             return sourceMap;
         }
+    }
+
+    export function find(sourceFile: string): LuaMultiReturn<[string, SourceMap] | [undefined, undefined]> {
+        for (const [scriptFile, sourceMap] of pairs(cache)) {
+            if (sourceMap !== false) {
+                for (const source of sourceMap.sources) {
+                    if (source === sourceFile) {
+                        return $multi(scriptFile, sourceMap);
+                    }
+                }
+            }
+        }
+        return $multi(undefined, undefined);
     }
 }
