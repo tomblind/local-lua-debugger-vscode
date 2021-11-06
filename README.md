@@ -241,7 +241,7 @@ end)
 
 ### TypescriptToLua (Custom Environment)
 
-```json
+```js
 {
   "name": "Debug TSTL",
   "type": "lua-local",
@@ -250,7 +250,7 @@ end)
     "command": "my_custom_environment"
   },
   "args": [
-    // ...
+    ...
   ],
   "scriptFiles": ["**/*.lua"] // Required for breakpoints in ts files to work
 }
@@ -258,7 +258,7 @@ end)
 
 **tsconfig.json**
 
-```ts
+```js
 {
   "compilerOptions": {
     "sourceMap": true,
