@@ -1,3 +1,10 @@
+## Version 0.3.0
+- **BREAKING CHANGE**: Breakpoints for sourcemapped files now resolved at startup. `scriptFiles` option added and is required for this functionality. See [README](README.md) for more information.
+- Added `LOCAL_LUA_DEBUGGER_FILEPATH` environment variable to supply the debugger script's path to environments that cannot require it normally
+- Fixed issues with paths in environments that internally use absolute paths in their local project
+- Fixed ignoring explicitly disabling `breakImmediately` in `start()`
+- Performance improvements
+
 ## Version 0.2.3
 - Added support for breaking on implicit errors in coroutines (not supported in Lua 5.1)
 - Global reference to the debugger is now stored in `lldebugger`

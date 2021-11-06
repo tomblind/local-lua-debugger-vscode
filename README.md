@@ -3,6 +3,10 @@
 A simple Lua debugger which requires no additional dependencies.
 
 ---
+## Notice of Breaking Change
+Beginning in version 0.3.0, projects which use sourcemaps to debug code transpiled from another language (such as TypescriptToLua), **must** specify the [`scriptFiles`](#scriptFiles) launch configuration option in order to use breakpoints in the original source files. This allows these to be resolved at startup instead of at runtime which allows for a significant performance increase.
+
+---
 ## Features
 - Debug Lua using stand-alone interpretor or a custom executable
 - Supports Lua versions 5.1, 5.2, 5.3 and [LuaJIT](https://luajit.org/)
@@ -95,7 +99,13 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 ## Additional Configuration Options
 #### `scriptRoots`
 
-A list of alternate paths to find lua scripts. This is useful for environments like LÖVE, which use custom resolvers to find scripts in other locations than what is in `package.config`.
+A list of alternate paths to find Lua scripts. This is useful for environments like LÖVE, which use custom resolvers to find scripts in other locations than what is in `package.config`.
+
+#### `scriptFiles`
+
+A list of glob patterns identifying where to find Lua scripts in the workspace when debugging. This is required for placing breakpoints in sourcemapped files (ex. 'ts' scripts when using TypescriptToLua), as the source files must be looked up ahead of time so that breakpoints can be resolved.
+
+Example: `scriptFiles: ["**/*.lua"]`
 
 #### `breakInCoroutines`
 
@@ -155,7 +165,17 @@ if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
 end
 
 function love.load()
-    ...
+  ...
+```
+
+**Note** that `console` must be set to `false` (the default value) in `conf.lua`, or the debugger will not be able to communicate with the running program.
+
+**game/conf.lua**
+
+```lua
+function love.conf(t)
+  t.console = false
+end
 ```
 
 ### Busted
