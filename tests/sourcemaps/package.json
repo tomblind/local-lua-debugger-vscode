@@ -1,0 +1,14 @@
+{
+  "name": "sourcemaps",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tstl -p ."
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "typescript-to-lua": "^1.1.1"
+  }
+}
