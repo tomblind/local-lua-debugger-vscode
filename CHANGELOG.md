@@ -1,3 +1,6 @@
+## Version 0.3.1
+- Removed tests from extension bundle
+
 ## Version 0.3.0
 - **BREAKING CHANGE**: Breakpoints for sourcemapped files now resolved at startup. `scriptFiles` option added and is required for this functionality. See [README](README.md) for more information.
 - Added `LOCAL_LUA_DEBUGGER_FILEPATH` environment variable to supply the debugger script's path to environments that cannot require it normally
