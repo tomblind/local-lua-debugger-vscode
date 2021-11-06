@@ -24,7 +24,7 @@ import {luaRawLen} from "./luafuncs";
 import {Format} from "./format";
 import {Vars} from "./debugger";
 import {Thread, mainThread, mainThreadName} from "./thread";
-import { Breakpoint } from "./breakpoint";
+import {Breakpoint} from "./breakpoint";
 
 export namespace Send {
     const startToken: LuaDebug.StartToken = "@lldbg|";
