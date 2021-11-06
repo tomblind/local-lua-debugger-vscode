@@ -250,7 +250,7 @@ end)
     "command": "my_custom_environment"
   },
   "args": [
-    ...
+    // ...
   ],
   "scriptFiles": ["**/*.lua"] // Required for breakpoints in ts files to work
 }
