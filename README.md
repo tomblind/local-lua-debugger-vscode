@@ -238,3 +238,34 @@ describe("a test", function()
   ...
 end)
 ```
+
+### TypescriptToLua (Custom Environment)
+
+```json
+{
+  "name": "Debug TSTL",
+  "type": "lua-local",
+  "request": "launch",
+  "program": {
+    "command": "my_custom_environment"
+  },
+  "args": [
+    ...
+  ],
+  "scriptFiles": ["**/*.lua"] // Required for breakpoints in ts files to work
+}
+```
+
+**tsconfig.json**
+
+```ts
+{
+  "compilerOptions": {
+    "sourceMap": true,
+    ...
+  },
+  "tstl": {
+    "noResolvePaths": ["lldebugger"] // Required so TSTL ignores the missing dependency
+  }
+}
+```
