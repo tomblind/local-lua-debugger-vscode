@@ -703,11 +703,12 @@ export namespace Debugger {
                 }
 
             } else if (inp.sub(1, 6) === "script") {
-                const [scriptFile] = inp.match("^script%s+(.+)$");
+                let [scriptFile] = inp.match("^script%s+(.+)$");
                 if (!scriptFile) {
                     Send.error("Bad script file");
 
                 } else {
+                    scriptFile = Path.format(scriptFile);
                     const foundSourceMap = SourceMap.get(scriptFile);
                     if (foundSourceMap) {
                         Send.result(`added ${scriptFile}: source map found`);
@@ -845,6 +846,7 @@ export namespace Debugger {
 
     //Convert source paths to mapped
     function mapSource(indent: string, file: string, lineStr: string, remainder: string) {
+        file = Path.format(file);
         const sourceMap = SourceMap.get(file);
         if (sourceMap) {
             const line = luaAssert(tonumber(lineStr));
