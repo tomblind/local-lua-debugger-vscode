@@ -10,7 +10,8 @@
                 "file": "${workspaceFolder}/lua/main.lua"
             },
             "cwd": "${workspaceFolder}/lua",
-            "verbose": true
+            "verbose": true,
+            "scriptFiles": ["lua/**/*.lua"]
         }
     ]
 }

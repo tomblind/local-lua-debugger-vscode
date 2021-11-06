@@ -184,14 +184,14 @@ export class LuaDebugSession extends LoggingDebugSession {
     ): Promise<void> {
         this.config = args;
         this.autoContinueNext = this.config.stopOnEntry !== true;
-        this.pendingScripts = [
-            "main.lua",
-            "C:\\Users\\tomb\\projects\\local-lua-debugger-vscode\\tests\\sourcemaps\\lua\\sub\\sub.lua"
-        ];
 
         this.showOutput("launchRequest", OutputCategory.Request);
 
         await this.waitForConfiguration();
+
+        if (this.config.scriptFiles) {
+            this.pendingScripts = this.config.scriptFiles;
+        }
 
         //Setup process
         if (!path.isAbsolute(this.config.cwd)) {

@@ -37,11 +37,11 @@ function abortLaunch(message: string) {
 }
 
 const configurationProvider: vscode.DebugConfigurationProvider = {
-    resolveDebugConfiguration(
+    async resolveDebugConfiguration(
         folder: vscode.WorkspaceFolder | undefined,
         config: vscode.DebugConfiguration & Partial<LaunchConfig>,
         token?: vscode.CancellationToken
-    ): vscode.ProviderResult<vscode.DebugConfiguration> {
+    ): Promise<vscode.DebugConfiguration | null | undefined> {
         //Validate config
         const editor = vscode.window.activeTextEditor;
         if (typeof config.request === "undefined" || typeof config.type === "undefined") {
@@ -74,6 +74,16 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
                 luaConfig.file = editor.document.uri.fsPath;
             }
             config.program = luaConfig as LuaProgramConfig;
+        }
+
+        if (Array.isArray(config.scriptFiles)) {
+            const nonString = config.scriptFiles.find(p => typeof p !== "string");
+            if (typeof nonString !== "undefined") {
+                return abortLaunch(`invalid value in scriptFiles: "${nonString}"`);
+            } else {
+                const uris = await Promise.all(config.scriptFiles.map(p => vscode.workspace.findFiles(p)));
+                config.scriptFiles = uris.flatMap(u => u.map(uri => uri.fsPath));
+            }
         }
 
         //Pass paths to debugger
