@@ -247,20 +247,58 @@ describe("a test", function()
 end)
 ```
 
+### Defold
+
+```js
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug",
+      "type": "lua-local",
+      "request": "launch",
+      "program": {
+        "command": "dmengine"
+      },
+      "args": ["./build/default/game.projectc"],
+      "scriptRoots": ["."] // Required for debugger to find scripts
+    }
+  ]
+}
+```
+
+```lua
+if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
+	local lldebugger = loadfile(os.getenv("LOCAL_LUA_DEBUGGER_FILEPATH"))()
+	lldebugger.start()
+end
+
+function init(self)
+  ...
+end
+```
+
+Information on downloading dmengine for your platform can be found [here](https://forum.defold.com/t/editor-2-dmengine-versions/9605).
+
 ### TypescriptToLua (Custom Environment)
 
 ```js
 {
-  "name": "Debug TSTL",
-  "type": "lua-local",
-  "request": "launch",
-  "program": {
-    "command": "my_custom_environment"
-  },
-  "args": [
-    ...
-  ],
-  "scriptFiles": ["**/*.lua"] // Required for breakpoints in ts files to work
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug TSTL",
+      "type": "lua-local",
+      "request": "launch",
+      "program": {
+        "command": "my_custom_environment"
+      },
+      "args": [
+        ...
+      ],
+      "scriptFiles": ["**/*.lua"] // Required for breakpoints in ts files to work
+    }
+  ]
 }
 ```
 
