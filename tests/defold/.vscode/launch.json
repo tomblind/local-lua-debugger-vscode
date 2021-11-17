@@ -1,0 +1,16 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "command": "${env:DEFOLD_PATH}/dmengine"
+            },
+            "args": ["./build/default/game.projectc"],
+            "scriptRoots": ["."],
+            "verbose": true,
+        }
+    ]
+}
