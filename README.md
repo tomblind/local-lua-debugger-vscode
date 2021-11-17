@@ -107,6 +107,12 @@ A list of glob patterns identifying where to find Lua scripts in the workspace w
 
 Example: `scriptFiles: ["**/*.lua"]`
 
+#### `ignorePatterns`
+
+A list of [Lua patterns](https://www.lua.org/manual/5.4/manual.html#6.4.1) that specifies files to skip when stepping through code.
+
+Example: `ignorePatterns: ["^/usr"]`
+
 #### `breakInCoroutines`
 
 Break into the debugger when errors occur inside coroutines.
@@ -195,7 +201,8 @@ Note that even when using busted via a lua interpreter, it must be set up as a c
       },
       "args": [
         "test/start-cli.lua"
-      ]
+      ],
+      "ignorePatterns": "^/usr"
     },
     {
       "name": "Debug Busted via Lua Interpreter",
@@ -206,7 +213,8 @@ Note that even when using busted via a lua interpreter, it must be set up as a c
       },
       "args": [
         "test/start-interpreter.lua"
-      ]
+      ],
+      "ignorePatterns": "^/usr"
     }
   ]
 }

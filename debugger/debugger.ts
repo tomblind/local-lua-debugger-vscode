@@ -415,6 +415,7 @@ export namespace Debugger {
     let breakAtDepth = -1;
     let breakInThread: Thread | undefined;
     let updateHook: { (): void };
+    let ignorePatterns: string[] | undefined;
 
     function debugBreak(activeThread: Thread, stackOffset: number) {
         ++stackOffset;
@@ -468,7 +469,8 @@ export namespace Debugger {
                     ["break clear", "delete all breakpoints"],
                     ["threads", "list active thread ids"],
                     ["thread n", "set current thread by id"],
-                    ["script", "add known script file (pre-caches sourcemap for breakpoint)"]
+                    ["script", "add known script file (pre-caches sourcemap for breakpoint)"],
+                    ["ignore", "add pattern for files to ignore when stepping"]
                 );
 
             } else if (inp === "threads") {
@@ -717,6 +719,23 @@ export namespace Debugger {
                     }
                 }
 
+            } else if (inp.sub(1, 6) === "ignore") {
+                const [ignorePattern] = inp.match("^ignore%s+(.+)$");
+                if (!ignorePattern) {
+                    Send.error("Bad ignore pattern");
+                } else {
+                    const [match, err] = pcall(string.match, "", ignorePattern);
+                    if (!match) {
+                        Send.error(`Bad ignore pattern "${ignorePattern}": ${err}`);
+                    } else {
+                        if (!ignorePatterns) {
+                            ignorePatterns = [];
+                        }
+                        table.insert(ignorePatterns, ignorePattern);
+                        Send.result(`Added ignore pattern "${ignorePattern}"`);
+                    }
+                }
+
             } else {
                 Send.error("Bad command");
             }
@@ -781,6 +800,17 @@ export namespace Debugger {
                     && topFrameSource.short_src.sub(1, builtinFunctionPrefix.length) === builtinFunctionPrefix
                 ) {
                     return;
+                }
+
+                //Ignore patterns
+                if (ignorePatterns) {
+                    const source = Path.format(topFrameSource.source);
+                    for (const pattern of ignorePatterns) {
+                        const [match] = source.match(pattern);
+                        if (match) {
+                            return;
+                        }
+                    }
                 }
 
                 Send.debugBreak("step", "step", getThreadId(activeThread));

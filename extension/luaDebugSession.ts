@@ -136,6 +136,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private readonly variableHandles = new Handles<string>(ScopeType.Global + 1);
     private breakpointsPending = false;
     private pendingScripts: string[] | null = null;
+    private pendingIgnorePatterns: string[] | null = null;
     private autoContinueNext = false;
     private readonly activeThreads = new Map<number, Thread>();
     private isRunning = false;
@@ -191,6 +192,10 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         if (this.config.scriptFiles) {
             this.pendingScripts = this.config.scriptFiles;
+        }
+
+        if (this.config.ignorePatterns) {
+            this.pendingIgnorePatterns = this.config.ignorePatterns;
         }
 
         //Setup process
@@ -750,9 +755,23 @@ export class LuaDebugSession extends LoggingDebugSession {
                 const resultMsg = await this.waitForCommandResponse(`script ${scriptFile}`);
                 if (resultMsg.type === "result" && typeof resultMsg.result.value !== "undefined") {
                     this.showOutput(resultMsg.result.value, OutputCategory.Info);
+                } else if (resultMsg.type === "error") {
+                    this.showOutput(resultMsg.error, OutputCategory.Error);
                 }
             }
             this.pendingScripts = null;
+        }
+
+        if (this.pendingIgnorePatterns) {
+            for (const ignorePattern of this.pendingIgnorePatterns) {
+                const resultMsg = await this.waitForCommandResponse(`ignore ${ignorePattern}`);
+                if (resultMsg.type === "result" && typeof resultMsg.result.value !== "undefined") {
+                    this.showOutput(resultMsg.result.value, OutputCategory.Info);
+                } else if (resultMsg.type === "error") {
+                    this.showOutput(resultMsg.error, OutputCategory.Error);
+                }
+            }
+            this.pendingIgnorePatterns = null;
         }
 
         if (this.breakpointsPending) {

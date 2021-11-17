@@ -11,6 +11,7 @@
             "args": [
                 "${workspaceFolder}/test/start-cli.lua"
             ],
+            "ignorePatterns": ["^/usr"],
             "verbose": true
         },
         {
@@ -23,6 +24,7 @@
             "args": [
                 "${workspaceFolder}/test/start-interpreter.lua"
             ],
+            "ignorePatterns": ["^/usr"],
             "verbose": true
         }
     ]

@@ -124,6 +124,13 @@
                                 },
                                 "description": "Glob pattern specifying Lua scripts to be debugged (required for breakpoints in source mapped files)"
                             },
+                            "ignorePatterns": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "Lua patterns specifying scripts to be ignored when stepping"
+                            },
                             "verbose": {
                                 "type": "boolean",
                                 "description": "Enable verbose output",
