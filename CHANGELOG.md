@@ -1,3 +1,7 @@
+## Version 0.3.2
+- Added `ignorePatterns` option to skip over specified files when stepping (useful for busted)
+- Allowed `scriptFiles` to work with leading relative paths (`./`)
+
 ## Version 0.3.1
 - Removed tests from extension bundle
 
