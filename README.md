@@ -68,7 +68,7 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 ---
 ## Requirements & Limitations
 - The Lua environment must support communication via stdio.
-  - Some enviroments may require command line options to support this (ex. Corona requires `/no-console` flag)
+  - Some enviroments may require command line options to support this (ex. Solar2D requires `/no-console` flag)
   - Use of `io.read` or other calls that require user input will cause problems
 - The Lua environment must be built with the `debug` library, and no other code should attempt to set debug hooks.
 - You cannot manually pause debugging while the program is running.
@@ -280,6 +280,53 @@ end
 
 Information on downloading dmengine for your platform can be found [here](https://forum.defold.com/t/editor-2-dmengine-versions/9605).
 
+### Solar2D / Corona
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug",
+      "type": "lua-local",
+      "request": "launch",
+      "windows": {
+        "program": {
+          "command": "C:\\Program Files (x86)\\Corona Labs\\Corona\\Corona Simulator.exe",
+        },
+        "args": [
+          "/no-console",
+          "/debug",
+          "${workspaceFolder}\\main.lua"
+        ]
+      },
+      "osx": {
+        "program": {
+          "command": "/Applications/Corona/CoronaSimulator.app/Contents/MacOS/CoronaSimulator",
+        },
+        "args": [
+          "-no-console"
+          "YES"
+          "-debug"
+          "1"
+          "-project"
+          "${workspaceFolder}/main.lua"
+        ]
+      }
+    }
+  ]
+}
+```
+
+```lua
+if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
+  local lldebugger = loadfile(os.getenv("LOCAL_LUA_DEBUGGER_FILEPATH"))()
+  lldebugger.start()
+end
+
+...
+```
+
 ### TypescriptToLua (Custom Environment)
 
 ```js
@@ -300,6 +347,14 @@ Information on downloading dmengine for your platform can be found [here](https:
     }
   ]
 }
+```
+
+```lua
+if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
+  require("lldebugger").start()
+end
+
+...
 ```
 
 **tsconfig.json**

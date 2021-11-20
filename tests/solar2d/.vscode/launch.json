@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug",
+            "type": "lua-local",
+            "request": "launch",
+			"program": {
+				"command": "C:\\Program Files (x86)\\Corona Labs\\Corona\\Corona Simulator.exe"
+			},
+			"args": [
+			  "/no-console",
+			  "/debug",
+			  "${workspaceFolder}\\main.lua"
+			],
+			"verbose": true
+        }
+    ]
+}
