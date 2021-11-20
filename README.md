@@ -269,8 +269,8 @@ end)
 
 ```lua
 if os.getenv("LOCAL_LUA_DEBUGGER_VSCODE") == "1" then
-	local lldebugger = loadfile(os.getenv("LOCAL_LUA_DEBUGGER_FILEPATH"))()
-	lldebugger.start()
+  local lldebugger = loadfile(os.getenv("LOCAL_LUA_DEBUGGER_FILEPATH"))()
+  lldebugger.start()
 end
 
 function init(self)
