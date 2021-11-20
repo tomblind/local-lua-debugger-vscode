@@ -81,7 +81,9 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
             if (typeof nonString !== "undefined") {
                 return abortLaunch(`invalid value in scriptFiles: "${nonString}"`);
             } else {
-                const uris = await Promise.all(config.scriptFiles.map(p => vscode.workspace.findFiles(p)));
+                const uris = await Promise.all(
+                    config.scriptFiles.map(p => vscode.workspace.findFiles(path.normalize(p)))
+                );
                 config.scriptFiles = uris.flatMap(u => u.map(uri => uri.fsPath));
             }
         }
