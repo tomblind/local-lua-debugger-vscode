@@ -116,6 +116,27 @@ export namespace Debugger {
         Send.frames(frames);
     }
 
+    const supportsUtf8Identifiers = (() => {
+        const identifier = `${string.char(226)}${string.char(143)}${string.char(176)}`;
+        const [, err] = loadLuaString(`local ${identifier} = true return ${identifier}`);
+        return err === undefined;
+    })();
+
+    function isValidIdentifier(name: string) {
+        if (supportsUtf8Identifiers) {
+            for (const [c] of name.gmatch("[^a-zA-Z0-9_]")) {
+                const [a] = c.byte();
+                if (a && a < 128) {
+                    return false;
+                }
+            }
+            return true;
+        } else {
+            const [invalidChar] = name.match("[^a-zA-Z0-9_]");
+            return invalidChar === undefined;
+        }
+    }
+
     function getLocals(level: number, thread?: Thread): Locals {
         const locs: Locals = {};
 
@@ -149,8 +170,7 @@ export namespace Debugger {
                 break;
             }
 
-            const [invalidChar] = name.match("[^a-zA-Z0-9_]");
-            if (!invalidChar) {
+            if (isValidIdentifier(name)) {
                 locs[name] = {val, index, type: type(val)};
             }
 
@@ -258,8 +278,7 @@ export namespace Debugger {
 
         function mapName(sourceName: string, isProperty: boolean) {
             if (isProperty) {
-                const [illegalChar] = sourceName.match("[^A-Za-z0-9_]");
-                if (illegalChar) {
+                if (isValidIdentifier(sourceName)) {
                     return `["${sourceName}"]`;
                 } else {
                     return `.${sourceName}`;

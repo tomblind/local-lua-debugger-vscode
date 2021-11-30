@@ -1,0 +1,15 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "LuaJit",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+                "lua": "luajit",
+                "file": "main.lua"
+            },
+            "verbose": true
+        },
+    ]
+}
