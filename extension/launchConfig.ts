@@ -23,10 +23,12 @@
 export interface LuaProgramConfig {
     lua: string;
     file: string;
+    communication?: string;
 }
 
 export interface CustomProgramConfig {
     command: string;
+    communication?: string;
 }
 
 export interface LaunchConfig {

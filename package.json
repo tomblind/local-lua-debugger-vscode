@@ -175,6 +175,11 @@
                                                 "type": "string",
                                                 "description": "The entry point file of the program",
                                                 "default": "${file}"
+                                            },
+                                            "communication": {
+                                                "enum": ["stdio", "pipe"],
+                                                "description": "Communication method between extension and debugger.",
+                                                "default": "stdio"
                                             }
                                         },
                                         "additionalProperties": false
@@ -185,6 +190,11 @@
                                             "command": {
                                                 "type": "string",
                                                 "description": "The custom command to run"
+                                            },
+                                            "communication": {
+                                                "enum": ["stdio", "pipe"],
+                                                "description": "Communication method between extension and debugger.",
+                                                "default": "stdio"
                                             }
                                         },
                                         "required": [

@@ -20,7 +20,7 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
-import {luaRawLen} from "./luafuncs";
+import {luaError, luaRawLen} from "./luafuncs";
 import {Format} from "./format";
 import {Vars} from "./debugger";
 import {Thread, mainThread, mainThreadName} from "./thread";
@@ -29,6 +29,20 @@ import {Breakpoint} from "./breakpoint";
 export namespace Send {
     const startToken: LuaDebug.StartToken = "@lldbg|";
     const endToken: LuaDebug.EndToken = "|lldbg@";
+
+    const outputFileEnv: LuaDebug.OutputFileEnv = "LOCAL_LUA_DEBUGGER_OUTPUT_FILE";
+    const outputFilePath = os.getenv(outputFileEnv);
+    let outputFile: LuaFile;
+    if (outputFilePath && outputFilePath.length > 0) {
+        const [file, err] = io.open(outputFilePath, "w+");
+        if (!file) {
+            luaError(`Failed to open output file "${outputFilePath}": ${err}\n`);
+        }
+        outputFile = file as LuaFile;
+    } else {
+        outputFile = io.stdout;
+    }
+    outputFile.setvbuf("no");
 
     function getPrintableValue(value: unknown) {
         const valueType = type(value);
@@ -63,7 +77,7 @@ export namespace Send {
     }
 
     function send(message: LuaDebug.MessageBase) {
-        io.write(`${startToken}${Format.asJson(message)}${endToken}`);
+        outputFile.write(`${startToken}${Format.asJson(message)}${endToken}`);
     }
 
     export function error(err: string): void {
@@ -186,6 +200,6 @@ export namespace Send {
             const [name, desc] = unpack(nameAndDesc);
             table.insert(builtStrs, `${name}${string.rep(" ", nameLength - name.length + 1)}: ${desc}`);
         }
-        io.write(`${table.concat(builtStrs, "\n")}\n`);
+        outputFile.write(`${table.concat(builtStrs, "\n")}\n`);
     }
 }

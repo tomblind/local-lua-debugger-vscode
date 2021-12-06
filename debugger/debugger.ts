@@ -58,9 +58,22 @@ export namespace Debugger {
         (this: void, ...args: unknown[]): LuaMultiReturn<unknown[]>;
     }
 
-    const prompt = "";
     const debuggerName = "lldebugger.lua";
     const builtinFunctionPrefix = "[builtin:";
+
+    const inputFileEnv: LuaDebug.InputFileEnv = "LOCAL_LUA_DEBUGGER_INPUT_FILE";
+    const inputFilePath = os.getenv(inputFileEnv);
+    let inputFile: LuaFile;
+    if (inputFilePath && inputFilePath.length > 0) {
+        const [file, err] = io.open(inputFilePath, "r+");
+        if (!file) {
+            luaError(`Failed to open input file "${inputFilePath}": ${err}\n`);
+        }
+        inputFile = file as LuaFile;
+    } else {
+        inputFile = io.stdin;
+    }
+    inputFile.setvbuf("no");
 
     let skipNextBreak = false;
 
@@ -395,10 +408,7 @@ export namespace Debugger {
     }
 
     function getInput(): string | undefined {
-        if (prompt.length > 0) {
-            io.write(prompt);
-        }
-        const inp = io.read("*l");
+        const inp = inputFile.read("*l");
         return inp;
     }
 

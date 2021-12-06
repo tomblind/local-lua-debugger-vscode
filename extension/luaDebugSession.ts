@@ -41,6 +41,7 @@ import * as path from "path";
 import * as fs from "fs";
 import {Message} from "./message";
 import {LaunchConfig, isCustomProgramConfig} from "./launchConfig";
+import {createFifoPipe, createNamedPipe, DebugPipe} from "./debugPipe";
 
 interface MessageHandler<T extends LuaDebug.Message = LuaDebug.Message> {
     (msg: T): void;
@@ -71,6 +72,8 @@ const envVariable = "LOCAL_LUA_DEBUGGER_VSCODE";
 const filePathEnvVariable = "LOCAL_LUA_DEBUGGER_FILEPATH";
 const scriptRootsEnvVariable: LuaDebug.ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
 const breakInCoroutinesEnv: LuaDebug.BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
+const inputFileEnv: LuaDebug.InputFileEnv = "LOCAL_LUA_DEBUGGER_INPUT_FILE";
+const outputFileEnv: LuaDebug.OutputFileEnv = "LOCAL_LUA_DEBUGGER_OUTPUT_FILE";
 
 function getEnvKey(env: NodeJS.ProcessEnv, searchKey: string) {
     const upperSearchKey = searchKey.toUpperCase();
@@ -130,6 +133,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private readonly fileBreakpoints: { [file: string]: DebugProtocol.SourceBreakpoint[] | undefined } = {};
     private config?: LaunchConfig;
     private process: childProcess.ChildProcess | null = null;
+    private debugPipe: DebugPipe | null = null;
     private outputText = "";
     private onConfigurationDone?: () => void;
     private readonly messageHandlerQueue: MessageHandler[] = [];
@@ -229,6 +233,22 @@ export class LuaDebugSession extends LoggingDebugSession {
             processOptions.env[breakInCoroutinesEnv] = this.config.breakInCoroutines ? "1" : "0";
         }
 
+        //Open pipes
+        if (this.config.program.communication === "pipe") {
+            if (process.platform === "win32") {
+                this.debugPipe = createNamedPipe();
+            } else {
+                this.debugPipe = createFifoPipe();
+            }
+            this.debugPipe.open(
+                data => { void this.onDebuggerOutput(data); },
+                err => { this.showOutput(`${err}`, OutputCategory.Error); }
+            );
+
+            processOptions.env[outputFileEnv] = this.debugPipe.getOutputPipePath();
+            processOptions.env[inputFileEnv] = this.debugPipe.getInputPipePath();
+        }
+
         //Append lua path so it can find debugger script
         this.updateLuaPath("LUA_PATH_5_2", processOptions.env, false);
         this.updateLuaPath("LUA_PATH_5_3", processOptions.env, false);
@@ -264,8 +284,12 @@ export class LuaDebugSession extends LoggingDebugSession {
         );
 
         //Process callbacks
-        this.assert(this.process.stdout).on("data", data => { void this.onDebuggerOutput(data, false); });
-        this.assert(this.process.stderr).on("data", data => { void this.onDebuggerOutput(data, true); });
+        if (this.debugPipe) {
+            this.assert(this.process.stdout).on("data", data => { this.showOutput(`${data}`, OutputCategory.StdOut); });
+        } else {
+            this.assert(this.process.stdout).on("data", data => { void this.onDebuggerOutput(data); });
+        }
+        this.assert(this.process.stderr).on("data", data => { this.showOutput(data, OutputCategory.StdErr); });
         this.process.on("close", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
         this.process.on("disconnect", () => this.onDebuggerTerminated("disconnected"));
         this.process.on(
@@ -814,14 +838,8 @@ export class LuaDebugSession extends LoggingDebugSession {
         }
     }
 
-    private async onDebuggerOutput(data: unknown, isError: boolean) {
-        const dataStr = `${data}`;
-        if (isError) {
-            this.showOutput(dataStr, OutputCategory.StdErr);
-            return;
-        }
-
-        this.outputText += dataStr;
+    private async onDebuggerOutput(data: unknown) {
+        this.outputText += `${data}`;
 
         const [messages, processed, unprocessed] = Message.parse(this.outputText);
         let debugBreak: LuaDebug.DebugBreak | undefined;
@@ -848,6 +866,11 @@ export class LuaDebugSession extends LoggingDebugSession {
             return;
         }
 
+        if (this.debugPipe) {
+            this.debugPipe.close();
+            this.debugPipe = null;
+        }
+
         this.process = null;
         this.isRunning = false;
 
@@ -866,7 +889,11 @@ export class LuaDebugSession extends LoggingDebugSession {
         }
 
         this.showOutput(cmd, OutputCategory.Command);
-        this.assert(this.process.stdin).write(`${cmd}\n`);
+        if (this.debugPipe) {
+            this.debugPipe.write(`${cmd}\n`);
+        } else {
+            this.assert(this.process.stdin).write(`${cmd}\n`);
+        }
         return true;
     }
 

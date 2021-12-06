@@ -67,9 +67,9 @@ Note that the path to `lldebugger` will automatically be appended to the `LUA_PA
 
 ---
 ## Requirements & Limitations
-- The Lua environment must support communication via stdio.
-  - Some enviroments may require command line options to support this (ex. Solar2D requires `/no-console` flag)
-  - Use of `io.read` or other calls that require user input will cause problems
+- The Lua environment must support communication via either stdio or pipes (named pipes on Windows, fifos on Linux).
+  - Some enviroments may require command line options to support stdio communication (ex. Solar2D requires `/no-console` flag)
+  - Use of `io.read` or other calls that require user input will cause problems in stdio mode. Set [`program.communication`](#program.communication) to `pipe` to work around this.
 - The Lua environment must be built with the `debug` library, and no other code should attempt to set debug hooks.
 - You cannot manually pause debugging while the program is running.
 - In Lua 5.1 and LuaJIT, the main thread cannot be accessed while stopped inside of a coroutine.
@@ -134,6 +134,14 @@ List of arguments to pass to Lua script or custom environment when launching.
 #### `env`
 
 Specify environment variables to set when launching executable.
+
+#### `program.communication`
+
+Specifies how the extension communicates with the debugger.
+
+Possible values:
+- `stdio` (default): Messages are embeded in stdin and stdout.
+- `pipe`: Pipes are created for passing messages (named pipes on Windows, fifos on Linux). Use this if your environment has issues with stdio communication.
 
 #### `verbose`
 
