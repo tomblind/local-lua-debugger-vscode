@@ -70,10 +70,10 @@ export namespace Debugger {
             luaError(`Failed to open input file "${inputFilePath}": ${err}\n`);
         }
         inputFile = file as LuaFile;
+        inputFile.setvbuf("no");
     } else {
         inputFile = io.stdin;
     }
-    inputFile.setvbuf("no");
 
     let skipNextBreak = false;
 

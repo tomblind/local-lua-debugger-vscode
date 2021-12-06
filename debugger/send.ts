@@ -39,10 +39,10 @@ export namespace Send {
             luaError(`Failed to open output file "${outputFilePath}": ${err}\n`);
         }
         outputFile = file as LuaFile;
+        outputFile.setvbuf("no");
     } else {
         outputFile = io.stdout;
     }
-    outputFile.setvbuf("no");
 
     function getPrintableValue(value: unknown) {
         const valueType = type(value);
