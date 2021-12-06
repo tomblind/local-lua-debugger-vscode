@@ -101,15 +101,18 @@ export function loadLuaFile(
 }
 
 export function luaGetEnv(level: number, thread?: LuaThread): Env | undefined {
-    const info = thread ? luaAssert(debug.getinfo(thread, level, "f")) : luaAssert(debug.getinfo(level + 1, "f"));
-    const func = luaAssert(info.func);
+    const info = thread ? debug.getinfo(thread, level, "f") : debug.getinfo(level + 1, "f");
+    if (!info || !info.func) {
+        return;
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (getfenv !== undefined) {
-        return getfenv(func) as Env | undefined;
+        return getfenv(info.func) as Env | undefined;
     } else {
         let i = 1;
         while (true) {
-            const [name, value] = debug.getupvalue(func, i);
+            const [name, value] = debug.getupvalue(info.func, i);
             if (!name) {
                 break;
             }
