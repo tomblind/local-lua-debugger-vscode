@@ -54,6 +54,10 @@ export namespace Send {
 
         } else {
             const [_, str] = pcall(tostring, value);
+            const strType = type(str);
+            if (strType !== "string") {
+                return `[${strType}]`;
+            }
             return `[${str}]`;
         }
     }
