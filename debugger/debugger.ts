@@ -97,15 +97,27 @@ export namespace Debugger {
         return coroutine.running() ?? mainThread;
     }
 
+    function getLine(info: debug.FunctionInfo) {
+        const currentLine = info.currentline && tonumber(info.currentline);
+        if (currentLine && currentLine > 0) {
+            return currentLine;
+        }
+        const lineDefined = info.linedefined && tonumber(info.linedefined);
+        if (lineDefined && lineDefined > 0) {
+            return lineDefined;
+        }
+        return -1;
+    }
+
     function backtrace(stack: debug.FunctionInfo[], frameIndex: number) {
         const frames: LuaDebug.Frame[] = [];
         for (const i of $range(0, stack.length - 1)) {
             const info = luaAssert(stack[i]);
             const frame: LuaDebug.Frame = {
                 source: info.source && Path.format(info.source) || "?",
-                line: info.currentline && luaAssert(tonumber(info.currentline)) || -1
+                line: getLine(info)
             };
-            if (info.source && info.currentline) {
+            if (info.source) {
                 const sourceMap = SourceMap.get(frame.source);
                 if (sourceMap) {
                     const lineMapping = sourceMap.mappings[frame.line];
@@ -446,9 +458,12 @@ export namespace Debugger {
     let updateHook: { (): void };
     let ignorePatterns: string[] | undefined;
 
-    function debugBreak(activeThread: Thread, stackOffset: number) {
+    function debugBreak(activeThread: Thread, stackOffset: number, activeLine?: number) {
         ++stackOffset;
         const activeStack = getStack(stackOffset);
+        if (activeLine && activeStack.length > 0) {
+            luaAssert(activeStack[0]).currentline = activeLine;
+        }
         const activeThreadFrameOffset = stackOffset;
 
         breakAtDepth = -1;
@@ -843,7 +858,7 @@ export namespace Debugger {
                 }
 
                 Send.debugBreak("step", "step", getThreadId(activeThread));
-                if (debugBreak(activeThread, debugHookStackOffset)) {
+                if (debugBreak(activeThread, debugHookStackOffset, line)) {
                     return;
                 }
             }
@@ -882,7 +897,7 @@ export namespace Debugger {
                             "breakpoint",
                             getThreadId(activeThread)
                         );
-                        debugBreak(activeThread, debugHookStackOffset);
+                        debugBreak(activeThread, debugHookStackOffset, line);
                         break;
                     }
                 } else {
@@ -896,7 +911,7 @@ export namespace Debugger {
                         "breakpoint",
                         getThreadId(activeThread)
                     );
-                    debugBreak(activeThread, debugHookStackOffset);
+                    debugBreak(activeThread, debugHookStackOffset, line);
                     break;
                 }
             }
