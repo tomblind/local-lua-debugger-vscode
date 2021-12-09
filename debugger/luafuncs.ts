@@ -101,7 +101,7 @@ export function loadLuaFile(
 }
 
 export function luaGetEnv(level: number, thread?: LuaThread): Env | undefined {
-    const info = thread ? debug.getinfo(thread, level, "f") : debug.getinfo(level + 1, "f");
+    const info = thread && debug.getinfo(thread, level, "f") || debug.getinfo(level + 1, "f");
     if (!info || !info.func) {
         return;
     }
