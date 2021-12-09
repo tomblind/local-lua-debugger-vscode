@@ -132,6 +132,8 @@ export namespace Debugger {
             }
             if (info.name) {
                 frame.func = info.name;
+            } else if (info.func) {
+                frame.func = tostring(info.func);
             }
             if (i === frameIndex) {
                 frame.active = true;
