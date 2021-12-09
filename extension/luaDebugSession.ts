@@ -289,7 +289,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         } else {
             this.assert(this.process.stdout).on("data", data => { void this.onDebuggerOutput(data); });
         }
-        this.assert(this.process.stderr).on("data", data => { this.showOutput(data, OutputCategory.StdErr); });
+        this.assert(this.process.stderr).on("data", data => { this.showOutput(`${data}`, OutputCategory.StdErr); });
         this.process.on("close", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
         this.process.on("disconnect", () => this.onDebuggerTerminated("disconnected"));
         this.process.on(
