@@ -113,6 +113,10 @@ A list of [Lua patterns](https://www.lua.org/manual/5.4/manual.html#6.4.1) that 
 
 Example: `ignorePatterns: ["^/usr"]`
 
+#### `stepUnmappedLines`
+
+Step into Lua when stepping through source-mapped code and no mapping is available for the current line.
+
 #### `breakInCoroutines`
 
 Break into the debugger when errors occur inside coroutines.

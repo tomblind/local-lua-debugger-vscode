@@ -113,6 +113,7 @@ declare namespace LuaDebug {
 
     type ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
     type BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
+    type StepUnmappedLinesEnv = "LOCAL_LUA_DEBUGGER_STEP_UNMAPPED_LINES";
     type InputFileEnv = "LOCAL_LUA_DEBUGGER_INPUT_FILE";
     type OutputFileEnv = "LOCAL_LUA_DEBUGGER_OUTPUT_FILE";
 }

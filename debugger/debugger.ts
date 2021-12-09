@@ -815,6 +815,8 @@ export namespace Debugger {
 
     const debugHookStackOffset = 2;
     const breakpointLookup = Breakpoint.getLookup();
+    const stepUnmappedLinesEnv: LuaDebug.StepUnmappedLinesEnv = "LOCAL_LUA_DEBUGGER_STEP_UNMAPPED_LINES";
+    const skipUnmappedLines = (os.getenv(stepUnmappedLinesEnv) !== "1");
 
     function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
         //Stepping
@@ -849,13 +851,24 @@ export namespace Debugger {
                 }
 
                 //Ignore patterns
+                let source: string | undefined;
                 if (ignorePatterns) {
-                    const source = Path.format(topFrameSource.source);
+                    source = Path.format(topFrameSource.source);
                     for (const pattern of ignorePatterns) {
                         const [match] = source.match(pattern);
                         if (match) {
                             return;
                         }
+                    }
+                }
+
+                //Ignore un-mapped lines in files with source maps
+                if (skipUnmappedLines) {
+                    source ||= Path.format(topFrameSource.source);
+                    const sourceMap = SourceMap.get(source);
+                    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+                    if (sourceMap && !sourceMap.mappings[line!]) {
+                        return;
                     }
                 }
 

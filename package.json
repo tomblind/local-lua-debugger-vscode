@@ -131,6 +131,11 @@
                                 },
                                 "description": "Lua patterns specifying scripts to be ignored when stepping"
                             },
+                            "stepUnmappedLines": {
+                                "type": "boolean",
+                                "description": "Step into lua when stepping through unmapped lines in source-mapped files",
+                                "default": true
+                            },
                             "verbose": {
                                 "type": "boolean",
                                 "description": "Enable verbose output",
