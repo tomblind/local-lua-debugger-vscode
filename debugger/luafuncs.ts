@@ -29,7 +29,7 @@ declare function load(
     chunkname?: string,
     mode?: "b" | "t" | "bt",
     env?: AnyTable
-): LuaMultiReturn<[{ (this: void): unknown }, undefined] | [undefined, string]>;
+): LuaMultiReturn<[{ (this: void): LuaMultiReturn<unknown[]> }, undefined] | [undefined, string]>;
 
 declare function loadfile(
     this: void,
@@ -69,14 +69,14 @@ export interface Env {
 export function loadLuaString(
     str: string,
     env?: Env
-): LuaMultiReturn<[{ (this: void): unknown }, undefined] | [undefined, string]> {
+): LuaMultiReturn<[{ (this: void): LuaMultiReturn<unknown[]> }, undefined] | [undefined, string]> {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     if (setfenv !== undefined) {
         const [f, e] = loadstring(str, str);
         if (f && env) {
             setfenv(f, env);
         }
-        return $multi(f as { (this: void): unknown }, e as undefined);
+        return $multi(f as { (this: void): LuaMultiReturn<unknown[]> }, e as undefined);
 
     } else {
         return load(str, str, "t", env);

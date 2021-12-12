@@ -94,9 +94,12 @@ export namespace Send {
         send(dbgBreak);
     }
 
-    export function result(value: unknown): void {
-        const dbgVal: LuaDebug.Value = {type: type(value), value: getPrintableValue(value)};
-        const dbgResult: LuaDebug.Result = {tag: "$luaDebug", type: "result", result: dbgVal};
+    export function result(...values: unknown[]): void {
+        const results: LuaDebug.Value[] = Format.makeExplicitArray();
+        for (const value of values) {
+            table.insert(results, {type: type(value), value: getPrintableValue(value)});
+        }
+        const dbgResult: LuaDebug.Result = {tag: "$luaDebug", type: "result", results};
         send(dbgResult);
     }
 

@@ -45,12 +45,13 @@ export interface Vars {
     [name: string]: Var | undefined;
 }
 
-export interface Local extends Var {
+export interface IndexedVar extends Var {
     index: number;
 }
 
 export interface Locals {
-    [name: string]: Local;
+    vars: { [name: string]: IndexedVar };
+    varargs?: IndexedVar[];
 }
 
 export namespace Debugger {
@@ -165,21 +166,21 @@ export namespace Debugger {
     }
 
     function getLocals(level: number, thread?: Thread): Locals {
-        const locs: Locals = {};
+        const locs: Locals = {vars: {}};
 
         if (thread === mainThreadName) {
             return locs; // Accessing locals for main thread, but we're in a coroutine right now
         }
 
         //Validate level
+        let info: debug.FunctionInfo | undefined;
         if (thread) {
-            if (!debug.getinfo(thread, level, "l")) {
-                return locs;
-            }
+            info = debug.getinfo(thread, level, "u");
         } else {
-            if (!debug.getinfo(level + 1, "l")) {
-                return locs;
-            }
+            info = debug.getinfo(level + 1, "u");
+        }
+        if (!info) {
+            return locs;
         }
 
         let name: string | undefined;
@@ -198,39 +199,41 @@ export namespace Debugger {
             }
 
             if (isValidIdentifier(name)) {
-                locs[name] = {val, index, type: type(val)};
+                locs.vars[name] = {val, index, type: type(val)};
             }
 
             ++index;
         }
 
         //Varargs
-        index = -1;
-        while (true) {
-            if (thread) {
-                [name, val] = debug.getlocal(thread, level, index);
-            } else {
-                [name, val] = debug.getlocal(level + 1, index);
+        const isVarArg = (info as unknown as { isvararg: boolean | undefined }).isvararg;
+        if (isVarArg !== false) {
+            if (isVarArg) {
+                locs.varargs = [];
             }
-            if (!name) {
-                break;
+            index = -1;
+            while (true) {
+                if (thread) {
+                    [name, val] = debug.getlocal(thread, level, index);
+                } else {
+                    [name, val] = debug.getlocal(level + 1, index);
+                }
+                if (!name) {
+                    break;
+                }
+                if (!locs.varargs) {
+                    locs.varargs = [];
+                }
+                table.insert(locs.varargs, {val, index, type: type(val)});
+                --index;
             }
-
-            [name] = name.gsub("[^a-zA-Z0-9_]+", "_");
-            let key = `${name}_${-index}`;
-            while (locs[key]) {
-                key = `${key}_`;
-            }
-            locs[key] = {val, index, type: type(val)};
-
-            --index;
         }
 
         return locs;
     }
 
     function getUpvalues(info: debug.FunctionInfo): Locals {
-        const ups: Locals = {};
+        const ups: Locals = {vars: {}};
 
         if (!info.nups || !info.func) {
             return ups;
@@ -238,7 +241,7 @@ export namespace Debugger {
 
         for (const index of $range(1, info.nups)) {
             const [name, val] = debug.getupvalue(info.func, index);
-            ups[luaAssert(name)] = {val, index, type: type(val)};
+            ups.vars[luaAssert(name)] = {val, index, type: type(val)};
         }
 
         return ups;
@@ -365,7 +368,7 @@ export namespace Debugger {
         level: number,
         info: debug.FunctionInfo,
         thread?: Thread
-    ): LuaMultiReturn<[true, unknown] | [false, string]> {
+    ): LuaMultiReturn<[true, ...unknown[]] | [false, string]> {
         if (thread === mainThreadName) {
             return $multi(false, "unable to access main thread while running in a coroutine");
         }
@@ -381,7 +384,7 @@ export namespace Debugger {
             {},
             {
                 __index(this: unknown, name: string) {
-                    const variable = locs[name] ?? ups[name];
+                    const variable = locs.vars[name] ?? ups.vars[name];
                     if (variable !== undefined) {
                         return variable.val;
                     } else {
@@ -389,7 +392,7 @@ export namespace Debugger {
                     }
                 },
                 __newindex(this: unknown, name: string, val: unknown) {
-                    const variable = locs[name] ?? ups[name];
+                    const variable = locs.vars[name] ?? ups.vars[name];
                     if (variable !== undefined) {
                         variable.type = type(val);
                         variable.val = val;
@@ -400,25 +403,34 @@ export namespace Debugger {
             }
         );
 
-        const [func, err] = loadLuaString(statement, env);
+        const loadStringResult = loadLuaString(statement, env);
+        const func = loadStringResult[0];
         if (!func) {
-            return $multi(false, err as string);
+            return $multi(false, loadStringResult[1]);
         }
 
-        const [success, result] = pcall(func);
-        if (success) {
-            for (const [_, loc] of pairs(locs)) {
+        const varargs: unknown[] = [];
+        if (locs.varargs) {
+            for (const vararg of locs.varargs) {
+                table.insert(varargs, vararg.val);
+            }
+        }
+
+        const results = pcall<unknown[], unknown[]>(func, ...unpack(varargs));
+        if (results[0]) {
+            for (const [_, loc] of pairs(locs.vars)) {
                 if (thread) {
                     debug.setlocal(thread, level, loc.index, loc.val);
                 } else {
                     debug.setlocal(level, loc.index, loc.val);
                 }
             }
-            for (const [_, up] of pairs(ups)) {
+            for (const [_, up] of pairs(ups.vars)) {
                 debug.setupvalue(luaAssert(info.func), up.index, up.val);
             }
+            return $multi(true, ...unpack(results, 2));
         }
-        return $multi(success as true, result);
+        return $multi(false, results[1]);
     }
 
     function getInput(): string | undefined {
@@ -454,6 +466,8 @@ export namespace Debugger {
         }
         return stack;
     }
+
+    const varArgTable: LuaDebug.VarArgTable = "{...}";
 
     let breakAtDepth = -1;
     let breakInThread: Thread | undefined;
@@ -603,13 +617,20 @@ export namespace Debugger {
 
             } else if (inp === "locals") {
                 const locs = getLocals(frame + frameOffset, currentThread !== activeThread ? currentThread : undefined);
-                mapVarNames(locs, sourceMap);
-                Send.vars(locs);
+                mapVarNames(locs.vars, sourceMap);
+                if (locs.varargs) {
+                    const varargVals: unknown[] = [];
+                    for (const vararg of locs.varargs) {
+                        table.insert(varargVals, vararg.val);
+                    }
+                    locs.vars[varArgTable] = {val: varargVals, index: -1, type: "table"};
+                }
+                Send.vars(locs.vars);
 
             } else if (inp === "ups") {
                 const ups = getUpvalues(info);
-                mapVarNames(ups, sourceMap);
-                Send.vars(ups);
+                mapVarNames(ups.vars, sourceMap);
+                Send.vars(ups.vars);
 
             } else if (inp === "globals") {
                 const globs = getGlobals(
@@ -691,16 +712,16 @@ export namespace Debugger {
 
                 } else {
                     const mappedExpression = mapExpressionNames(expression, sourceMap);
-                    const [s, r] = execute(
+                    const results = execute(
                         `return ${mappedExpression}`,
                         frame + frameOffset,
                         info,
                         currentThread !== activeThread ? currentThread : undefined
                     );
-                    if (s) {
-                        Send.result(r);
+                    if (results[0]) {
+                        Send.result(...unpack(results, 2));
                     } else {
-                        Send.error(r as string);
+                        Send.error(results[1]);
                     }
                 }
 
@@ -737,16 +758,16 @@ export namespace Debugger {
                     Send.error("Bad statement");
 
                 } else {
-                    const [s, r] = execute(
+                    const results = execute(
                         statement,
                         frame + frameOffset,
                         info,
                         currentThread !== activeThread ? currentThread : undefined
                     );
-                    if (s) {
-                        Send.result(r);
+                    if (results[0]) {
+                        Send.result(...unpack(results, 2));
                     } else {
-                        Send.error(r as string);
+                        Send.error(results[1]);
                     }
                 }
 

@@ -80,7 +80,7 @@ declare namespace LuaDebug {
 
     interface Result extends MessageBase {
         type: "result";
-        result: Value;
+        results: Value[];
     }
 
     interface Breakpoint {
@@ -107,6 +107,8 @@ declare namespace LuaDebug {
     }
 
     type Message = Error | DebugBreak | Result | Stack | Variables | Properties | Breakpoints | Threads;
+
+    type VarArgTable = "{...}";
 
     type StartToken = "@lldbg|";
     type EndToken = "|lldbg@";

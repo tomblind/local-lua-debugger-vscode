@@ -68,6 +68,7 @@ const enum OutputCategory {
 const maxStackCount = 100;
 const metatableDisplayName = "[[metatable]]";
 const tableLengthDisplayName = "[[length]]";
+const varArgTable: LuaDebug.VarArgTable = "{...}";
 const envVariable = "LOCAL_LUA_DEBUGGER_VSCODE";
 const filePathEnvVariable = "LOCAL_LUA_DEBUGGER_FILEPATH";
 const scriptRootsEnvVariable: LuaDebug.ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
@@ -460,6 +461,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     ): Promise<void> {
         let cmd: string | undefined;
         let baseName: string | undefined;
+        let isMultiResult = false;
 
         switch (args.variablesReference) {
         case ScopeType.Local:
@@ -479,6 +481,10 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         default:
             baseName = this.assert(this.variableHandles.get(args.variablesReference));
+            if (baseName.startsWith("@")) {
+                baseName = baseName.substr(1);
+                isMultiResult = true;
+            }
             cmd = `props ${baseName}`;
             if (typeof args.filter !== "undefined") {
                 cmd += ` ${args.filter}`;
@@ -518,7 +524,7 @@ export class LuaDebugSession extends LoggingDebugSession {
                 variables.push(this.buildVariable(vars.metatable, `getmetatable(${baseName})`, metatableDisplayName));
             }
 
-            if (typeof vars.length !== "undefined") {
+            if (typeof vars.length !== "undefined" && !isMultiResult) {
                 const value: LuaDebug.Value = {type: "number", value: vars.length.toString()};
                 variables.push(this.buildVariable(value, `#${baseName}`, tableLengthDisplayName));
             }
@@ -675,9 +681,17 @@ export class LuaDebugSession extends LoggingDebugSession {
         msg: LuaDebug.Message
     ): {success: true; value: string; variablesReference: number} | {success: false; error?: string} {
         if (msg.type === "result") {
-            const variablesReference = msg.result.type === "table" ? this.variableHandles.create(expression) : 0;
-            const value = `${typeof msg.result.value !== "undefined" ? msg.result.value : `[${msg.result.type}]`}`;
-            return {success: true, value, variablesReference};
+            if (msg.results.length === 0) {
+                return {success: true, value: "nil", variablesReference: 0};
+            } else if (msg.results.length === 1) {
+                const result = msg.results[0];
+                const variablesReference = result.type === "table" ? this.variableHandles.create(expression) : 0;
+                const value = `${typeof result.value !== "undefined" ? result.value : `[${result.type}]`}`;
+                return {success: true, value, variablesReference};
+            } else {
+                const variablesReference = this.variableHandles.create(`@({${expression}})`);
+                return {success: true, value: `[${msg.results.length}]`, variablesReference};
+            }
 
         } else if (msg.type === "error") {
             return {success: false, error: msg.error};
@@ -692,15 +706,26 @@ export class LuaDebugSession extends LoggingDebugSession {
     private buildVariable(variable: LuaDebug.Variable | LuaDebug.Value, refName: string, variableName?: string) {
         let valueStr: string;
         let ref: number | undefined;
+        let name: string | undefined;
         if (variable.type === "table") {
+            if (refName === varArgTable) {
+                valueStr = typeof variable.length !== "undefined" ? `[${variable.length}]` : "";
+                name = "...";
+                refName = `@(${refName})`;
+            } else if (typeof variable.value !== "undefined") {
+                valueStr = variable.value;
+            } else {
+                valueStr = "[table]";
+            }
             ref = this.variableHandles.create(refName);
-            valueStr = typeof variable.value !== "undefined" ? variable.value : "[table]";
         } else if (typeof variable.value === "undefined") {
             valueStr = `[${variable.type}]`;
         } else {
             valueStr = variable.value;
         }
-        const name = typeof variableName !== "undefined" ? variableName : (variable as LuaDebug.Variable).name;
+        if (typeof name === "undefined") {
+            name = typeof variableName !== "undefined" ? variableName : (variable as LuaDebug.Variable).name;
+        }
         const indexedVariables = typeof variable.length !== "undefined" && variable.length > 0
             ? variable.length + 1
             : variable.length;
@@ -781,8 +806,12 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (this.pendingScripts) {
             for (const scriptFile of this.pendingScripts) {
                 const resultMsg = await this.waitForCommandResponse(`script ${scriptFile}`);
-                if (resultMsg.type === "result" && typeof resultMsg.result.value !== "undefined") {
-                    this.showOutput(resultMsg.result.value, OutputCategory.Info);
+                if (resultMsg.type === "result") {
+                    for (const result of resultMsg.results) {
+                        if (typeof result.value !== "undefined") {
+                            this.showOutput(result.value, OutputCategory.Info);
+                        }
+                    }
                 } else if (resultMsg.type === "error") {
                     this.showOutput(resultMsg.error, OutputCategory.Error);
                 }
@@ -793,8 +822,12 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (this.pendingIgnorePatterns) {
             for (const ignorePattern of this.pendingIgnorePatterns) {
                 const resultMsg = await this.waitForCommandResponse(`ignore ${ignorePattern}`);
-                if (resultMsg.type === "result" && typeof resultMsg.result.value !== "undefined") {
-                    this.showOutput(resultMsg.result.value, OutputCategory.Info);
+                if (resultMsg.type === "result") {
+                    for (const result of resultMsg.results) {
+                        if (typeof result.value !== "undefined") {
+                            this.showOutput(result.value, OutputCategory.Info);
+                        }
+                    }
                 } else if (resultMsg.type === "error") {
                     this.showOutput(resultMsg.error, OutputCategory.Error);
                 }
