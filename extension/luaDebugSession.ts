@@ -68,7 +68,6 @@ const enum OutputCategory {
 const maxStackCount = 100;
 const metatableDisplayName = "[[metatable]]";
 const tableLengthDisplayName = "[[length]]";
-const varArgTable: LuaDebug.VarArgTable = "{...}";
 const envVariable = "LOCAL_LUA_DEBUGGER_VSCODE";
 const filePathEnvVariable = "LOCAL_LUA_DEBUGGER_FILEPATH";
 const scriptRootsEnvVariable: LuaDebug.ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
@@ -686,11 +685,12 @@ export class LuaDebugSession extends LoggingDebugSession {
             } else if (msg.results.length === 1) {
                 const result = msg.results[0];
                 const variablesReference = result.type === "table" ? this.variableHandles.create(expression) : 0;
-                const value = `${typeof result.value !== "undefined" ? result.value : `[${result.type}]`}`;
+                const value = result.value ?? `[${result.type}]`;
                 return {success: true, value, variablesReference};
             } else {
                 const variablesReference = this.variableHandles.create(`@({${expression}})`);
-                return {success: true, value: `[${msg.results.length}]`, variablesReference};
+                const value = `(${msg.results.map(r => r.value ?? `[${r.type}]`).join(", ")})`;
+                return {success: true, value, variablesReference};
             }
 
         } else if (msg.type === "error") {
@@ -706,26 +706,18 @@ export class LuaDebugSession extends LoggingDebugSession {
     private buildVariable(variable: LuaDebug.Variable | LuaDebug.Value, refName: string, variableName?: string) {
         let valueStr: string;
         let ref: number | undefined;
-        let name: string | undefined;
-        if (variable.type === "table") {
-            if (refName === varArgTable) {
-                valueStr = typeof variable.length !== "undefined" ? `[${variable.length}]` : "";
-                name = "...";
-                refName = `@(${refName})`;
-            } else if (typeof variable.value !== "undefined") {
-                valueStr = variable.value;
-            } else {
-                valueStr = "[table]";
-            }
+        if (refName === "...") {
+            valueStr = `(${variable.value ?? ""})`;
+            ref = variable.type === "table" ? this.variableHandles.create("@({...})") : 0;
+        } else if (variable.type === "table") {
+            valueStr = variable.value ?? "[table]";
             ref = this.variableHandles.create(refName);
         } else if (typeof variable.value === "undefined") {
             valueStr = `[${variable.type}]`;
         } else {
             valueStr = variable.value;
         }
-        if (typeof name === "undefined") {
-            name = typeof variableName !== "undefined" ? variableName : (variable as LuaDebug.Variable).name;
-        }
+        const name = typeof variableName !== "undefined" ? variableName : (variable as LuaDebug.Variable).name;
         const indexedVariables = typeof variable.length !== "undefined" && variable.length > 0
             ? variable.length + 1
             : variable.length;

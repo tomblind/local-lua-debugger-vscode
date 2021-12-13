@@ -26,10 +26,14 @@ function baz(a, ...)
 end
 
 foo("a")
+foo("a", "b")
 foo("a", "b", {c = "d"})
 
 bar("a")
+bar("a", "b")
 bar("a", "b", {c = "d"})
 
 baz("a")
+baz("a", "b")
+baz("a", {b = "c"})
 baz("a", "b", {c = "d"})

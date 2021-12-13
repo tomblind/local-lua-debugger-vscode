@@ -467,8 +467,6 @@ export namespace Debugger {
         return stack;
     }
 
-    const varArgTable: LuaDebug.VarArgTable = "{...}";
-
     let breakAtDepth = -1;
     let breakInThread: Thread | undefined;
     let updateHook: { (): void };
@@ -619,11 +617,11 @@ export namespace Debugger {
                 const locs = getLocals(frame + frameOffset, currentThread !== activeThread ? currentThread : undefined);
                 mapVarNames(locs.vars, sourceMap);
                 if (locs.varargs) {
-                    const varargVals: unknown[] = [];
+                    const varArgVals: unknown[] = [];
                     for (const vararg of locs.varargs) {
-                        table.insert(varargVals, vararg.val);
+                        table.insert(varArgVals, vararg.val);
                     }
-                    locs.vars[varArgTable] = {val: varargVals, index: -1, type: "table"};
+                    locs.vars["..."] = {val: varArgVals, index: -1, type: "table"};
                 }
                 Send.vars(locs.vars);
 

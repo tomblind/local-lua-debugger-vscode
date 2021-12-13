@@ -80,6 +80,14 @@ export namespace Send {
         return dbgVar;
     }
 
+    function buildVarArgs(name: string, values: unknown[]): LuaDebug.Variable {
+        const valueStrs: string[] = [];
+        for (const [_, val] of ipairs(values)) {
+            table.insert(valueStrs, getPrintableValue(val));
+        }
+        return {type: "table", name, value: table.concat(valueStrs, ", "), length: values.length};
+    }
+
     function send(message: LuaDebug.MessageBase) {
         outputFile.write(`${startToken}${Format.asJson(message)}${endToken}`);
     }
@@ -134,7 +142,7 @@ export namespace Send {
             variables: Format.makeExplicitArray()
         };
         for (const [name, info] of pairs(varsObj)) {
-            const dbgVar = buildVariable(name, info.val);
+            const dbgVar = name === "..." ? buildVarArgs(name, info.val as unknown[]) : buildVariable(name, info.val);
             table.insert(dbgVariables.variables, dbgVar);
         }
         send(dbgVariables);

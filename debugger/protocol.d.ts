@@ -108,8 +108,6 @@ declare namespace LuaDebug {
 
     type Message = Error | DebugBreak | Result | Stack | Variables | Properties | Breakpoints | Threads;
 
-    type VarArgTable = "{...}";
-
     type StartToken = "@lldbg|";
     type EndToken = "|lldbg@";
 
