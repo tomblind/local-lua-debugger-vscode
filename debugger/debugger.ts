@@ -363,6 +363,8 @@ export namespace Debugger {
         return mappedExpression;
     }
 
+    const metatableAccessor: LuaDebug.MetatableAccessor = "lldbg_getmetatable";
+
     function execute(
         statement: string,
         level: number,
@@ -384,12 +386,14 @@ export namespace Debugger {
             {},
             {
                 __index(this: unknown, name: string) {
+                    if (name === metatableAccessor) {
+                        return getmetatable;
+                    }
                     const variable = locs.vars[name] ?? ups.vars[name];
                     if (variable !== undefined) {
                         return variable.val;
-                    } else {
-                        return fenv[name];
                     }
+                    return fenv[name];
                 },
                 __newindex(this: unknown, name: string, val: unknown) {
                     const variable = locs.vars[name] ?? ups.vars[name];

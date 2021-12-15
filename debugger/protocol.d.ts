@@ -111,6 +111,8 @@ declare namespace LuaDebug {
     type StartToken = "@lldbg|";
     type EndToken = "|lldbg@";
 
+    type MetatableAccessor = "lldbg_getmetatable";
+
     type ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
     type BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
     type StepUnmappedLinesEnv = "LOCAL_LUA_DEBUGGER_STEP_UNMAPPED_LINES";

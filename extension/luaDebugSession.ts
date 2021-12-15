@@ -68,6 +68,7 @@ const enum OutputCategory {
 const maxStackCount = 100;
 const metatableDisplayName = "[[metatable]]";
 const tableLengthDisplayName = "[[length]]";
+const metatableAccessor: LuaDebug.MetatableAccessor = "lldbg_getmetatable";
 const envVariable = "LOCAL_LUA_DEBUGGER_VSCODE";
 const filePathEnvVariable = "LOCAL_LUA_DEBUGGER_FILEPATH";
 const scriptRootsEnvVariable: LuaDebug.ScriptRootsEnv = "LOCAL_LUA_DEBUGGER_SCRIPT_ROOTS";
@@ -520,7 +521,9 @@ export class LuaDebugSession extends LoggingDebugSession {
             }
 
             if (typeof vars.metatable !== "undefined" && typeof baseName !== "undefined") {
-                variables.push(this.buildVariable(vars.metatable, `getmetatable(${baseName})`, metatableDisplayName));
+                variables.push(
+                    this.buildVariable(vars.metatable, `${metatableAccessor}(${baseName})`, metatableDisplayName)
+                );
             }
 
             if (typeof vars.length !== "undefined" && !isMultiResult) {
