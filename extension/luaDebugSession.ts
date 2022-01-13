@@ -212,7 +212,8 @@ export class LuaDebugSession extends LoggingDebugSession {
         const processOptions/* : child_process.SpawnOptions */ = {
             env: Object.assign({}, process.env),
             cwd,
-            shell: true
+            shell: true,
+            detached: true
         };
 
         if (typeof this.config.env !== "undefined") {
@@ -673,7 +674,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             if (process.platform === "win32") {
                 childProcess.spawn("taskkill", ["/pid", this.assert(this.process.pid).toString(), "/f", "/t"]);
             } else {
-                this.process.kill();
+                process.kill(-this.assert(this.process.pid), "SIGKILL");
             }
         }
 
