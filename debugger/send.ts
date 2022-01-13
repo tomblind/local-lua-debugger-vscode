@@ -20,7 +20,7 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
-import {luaError, luaRawLen} from "./luafuncs";
+import {luaError, luaLenMetamethodSupported, luaRawLen} from "./luafuncs";
 import {Format} from "./format";
 import {Vars} from "./debugger";
 import {Thread, mainThread, mainThreadName} from "./thread";
@@ -173,12 +173,25 @@ export namespace Send {
                     table.insert(dbgProperties.properties, dbgVar);
                 }
             }
+
             const meta = getmetatable(tbl);
             if (meta) {
                 dbgProperties.metatable = {type: type(meta), value: getPrintableValue(meta)};
             }
-            if (len > 0 || (dbgProperties.properties.length === 0 && !dbgProperties.metatable)) {
-                dbgProperties.length = len;
+
+            const [lenStatus, tblLen] = pcall(() => (tbl as unknown[]).length as unknown);
+            if (!lenStatus) {
+                dbgProperties.length = {type: type(tblLen), error: tblLen as string};
+            } else if (tblLen !== 0) {
+                dbgProperties.length = {type: type(tblLen), value: tostring(tblLen)};
+            } else {
+                const mt = debug.getmetatable(tbl);
+                if (
+                    (!mt && dbgProperties.properties.length === 0)
+                    || (mt && luaLenMetamethodSupported && (mt as {__len?: unknown}).__len)
+                ) {
+                    dbgProperties.length = {type: type(tblLen), value: tostring(tblLen)};
+                }
             }
         }
         send(dbgProperties);

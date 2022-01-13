@@ -48,9 +48,15 @@ export const luaDebugTraceback = debug.traceback;
 export const luaCoroutineCreate = coroutine.create;
 export const luaCoroutineResume = coroutine.resume;
 
+export const luaLenMetamethodSupported = (() => (setmetatable({}, {__len: () => 42}) as unknown[]).length === 42)();
+
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
 export const luaRawLen = rawlen ?? function<T extends AnyTable>(v: T | string): number {
-    const mt = getmetatable(v);
+    if (!luaLenMetamethodSupported) {
+        return (v as unknown as unknown[]).length;
+    }
+
+    const mt = debug.getmetatable(v);
     if (!mt || !rawget(mt as {__len?: unknown}, "__len")) {
         return (v as unknown as unknown[]).length;
     } else {

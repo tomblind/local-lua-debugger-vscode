@@ -60,6 +60,7 @@ declare namespace LuaDebug {
         type: string;
         value?: string;
         length?: number;
+        error?: string;
     }
 
     interface Variable extends Value {
@@ -75,7 +76,7 @@ declare namespace LuaDebug {
         type: "properties";
         properties: Variable[];
         metatable?: Value;
-        length?: number;
+        length?: Value;
     }
 
     interface Result extends MessageBase {

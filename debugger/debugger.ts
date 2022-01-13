@@ -254,7 +254,7 @@ export namespace Debugger {
     ) {
         metaStack.set(tbl, true);
 
-        const meta = getmetatable(tbl) as Record<string, unknown> | undefined;
+        const meta = debug.getmetatable(tbl) as Record<string, unknown> | undefined;
         if (meta !== undefined && type(meta.__index) === "table" && metaStack.get(meta) === undefined) {
             populateGlobals(globs, meta.__index as Record<string, unknown>, metaStack);
         }
@@ -475,8 +475,11 @@ export namespace Debugger {
     let breakInThread: Thread | undefined;
     let updateHook: { (): void };
     let ignorePatterns: string[] | undefined;
+    let inDebugBreak = false;
 
     function debugBreak(activeThread: Thread, stackOffset: number, activeLine?: number) {
+        assert(!inDebugBreak);
+        inDebugBreak = true;
         ++stackOffset;
         const activeStack = getStack(stackOffset);
         if (activeLine && activeStack.length > 0) {
@@ -503,6 +506,7 @@ export namespace Debugger {
 
             } else if (inp === "autocont" || inp === "autocontinue") {
                 updateHook();
+                inDebugBreak = false;
                 return false; //Check breakpoints before resuming
 
             } else if (inp === "help") {
@@ -811,6 +815,7 @@ export namespace Debugger {
         }
 
         updateHook();
+        inDebugBreak = false;
         return true; //Resume execution immediately without checking breakpoints
     }
 
@@ -987,7 +992,7 @@ export namespace Debugger {
         if (skipNextBreak) {
             skipNextBreak = false;
 
-        } else {
+        } else if (!inDebugBreak) {
             const thread = getActiveThread();
             Send.debugBreak(message, "error", getThreadId(thread));
             debugBreak(thread, level);

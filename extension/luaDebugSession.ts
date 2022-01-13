@@ -527,9 +527,14 @@ export class LuaDebugSession extends LoggingDebugSession {
             }
 
             if (typeof vars.length !== "undefined" && !isMultiResult) {
-                const value: LuaDebug.Value = {type: "number", value: vars.length.toString()};
-                variables.push(this.buildVariable(value, `#${baseName}`, tableLengthDisplayName));
+                variables.push(this.buildVariable(vars.length, `#${baseName}`, tableLengthDisplayName));
             }
+
+        } else if (vars.type === "error") {
+            response.success = false;
+            response.message = this.filterErrorMessage(vars.error);
+            this.sendResponse(response);
+            return;
 
         } else {
             response.success = false;
@@ -648,8 +653,7 @@ export class LuaDebugSession extends LoggingDebugSession {
                     this.showOutput(result.error, OutputCategory.Error);
                 }
                 response.success = false;
-                const errorMsg = /^\[.+\]:\d+:(.+)/.exec(result.error);
-                response.message = (errorMsg !== null && errorMsg.length > 1) ? errorMsg[1] : result.error;
+                response.message = result.error;
             }
 
         } else {
@@ -688,16 +692,15 @@ export class LuaDebugSession extends LoggingDebugSession {
             } else if (msg.results.length === 1) {
                 const result = msg.results[0];
                 const variablesReference = result.type === "table" ? this.variableHandles.create(expression) : 0;
-                const value = result.value ?? `[${result.type}]`;
-                return {success: true, value, variablesReference};
+                return {success: true, value: this.getValueString(result), variablesReference};
             } else {
                 const variablesReference = this.variableHandles.create(`@({${expression}})`);
-                const value = `(${msg.results.map(r => r.value ?? `[${r.type}]`).join(", ")})`;
+                const value = `(${msg.results.map(r => this.getValueString(r)).join(", ")})`;
                 return {success: true, value, variablesReference};
             }
 
         } else if (msg.type === "error") {
-            return {success: false, error: msg.error};
+            return {success: false, error: this.filterErrorMessage(msg.error)};
 
         } else {
             return {success: false};
@@ -710,15 +713,15 @@ export class LuaDebugSession extends LoggingDebugSession {
         let valueStr: string;
         let ref: number | undefined;
         if (refName === "...") {
-            valueStr = `(${variable.value ?? ""})`;
+            valueStr = typeof variable.error !== "undefined"
+                ? `[error: ${this.filterErrorMessage(variable.error)}]`
+                : `(${variable.value ?? ""})`;
             ref = variable.type === "table" ? this.variableHandles.create("@({...})") : 0;
         } else if (variable.type === "table") {
-            valueStr = variable.value ?? "[table]";
+            valueStr = this.getValueString(variable);
             ref = this.variableHandles.create(refName);
-        } else if (typeof variable.value === "undefined") {
-            valueStr = `[${variable.type}]`;
         } else {
-            valueStr = variable.value;
+            valueStr = this.getValueString(variable);
         }
         const name = typeof variableName !== "undefined" ? variableName : (variable as LuaDebug.Variable).name;
         const indexedVariables = typeof variable.length !== "undefined" && variable.length > 0
@@ -737,6 +740,21 @@ export class LuaDebugSession extends LoggingDebugSession {
             throw new Error(message);
         }
         return value;
+    }
+
+    private filterErrorMessage(errorMsg: string) {
+        const errorOnly = /^.+:\d+:\s*(.+)/.exec(errorMsg);
+        return (errorOnly !== null && errorOnly.length > 1) ? errorOnly[1] : errorMsg;
+    }
+
+    private getValueString(value: LuaDebug.Value) {
+        if (typeof value.error !== "undefined") {
+            return `[error: ${this.filterErrorMessage(value.error)}]`;
+        } else if (typeof value.value !== "undefined") {
+            return value.value;
+        } else {
+            return `[${value.type}]`;
+        }
     }
 
     private resolvePath(filePath: string) {
@@ -804,7 +822,7 @@ export class LuaDebugSession extends LoggingDebugSession {
                 if (resultMsg.type === "result") {
                     for (const result of resultMsg.results) {
                         if (typeof result.value !== "undefined") {
-                            this.showOutput(result.value, OutputCategory.Info);
+                            this.showOutput(this.getValueString(result), OutputCategory.Info);
                         }
                     }
                 } else if (resultMsg.type === "error") {
@@ -820,7 +838,7 @@ export class LuaDebugSession extends LoggingDebugSession {
                 if (resultMsg.type === "result") {
                     for (const result of resultMsg.results) {
                         if (typeof result.value !== "undefined") {
-                            this.showOutput(result.value, OutputCategory.Info);
+                            this.showOutput(this.getValueString(result), OutputCategory.Info);
                         }
                     }
                 } else if (resultMsg.type === "error") {
