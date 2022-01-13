@@ -1000,7 +1000,7 @@ export namespace Debugger {
 
         if (propagate) {
             skipNextBreak = true;
-            return luaError(message, level);
+            luaError(message, level);
         }
     }
 
@@ -1077,7 +1077,7 @@ export namespace Debugger {
             threadStackOffsets.set(activeThread, 1);
             const results = luaCoroutineResume(thread, ...args);
             if (!results[0]) {
-                return breakForError(results[1], 1, true);
+                breakForError(results[1], 1, true);
             }
             threadStackOffsets.delete(activeThread);
             return unpack(results, 2);
@@ -1116,14 +1116,14 @@ export namespace Debugger {
     }
 
     //error replacement for catching errors
-    function debuggerError(message: string, level?: number) {
-        return breakForError(message, (level ?? 0) + 1, true);
+    function debuggerError(message: string, level?: number): never {
+        breakForError(message, (level ?? 1) + 1, true);
     }
 
     function debuggerAssert(v: unknown, ...args: unknown[]) {
         if (!v) {
             const message = args[0] !== undefined && args[0] || "assertion failed";
-            return breakForError(message, 1, true);
+            breakForError(message, 1, true);
         }
         return $multi(v, ...args);
     }
