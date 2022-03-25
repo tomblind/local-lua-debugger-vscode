@@ -213,7 +213,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             env: Object.assign({}, process.env),
             cwd,
             shell: true,
-            detached: true
+            detached: process.platform !== "win32"
         };
 
         if (typeof this.config.env !== "undefined") {
