@@ -308,7 +308,7 @@ export namespace Debugger {
 
         function mapName(sourceName: string, isProperty: boolean) {
             if (isProperty) {
-                if (isValidIdentifier(sourceName)) {
+                if (!isValidIdentifier(sourceName)) {
                     return `["${sourceName}"]`;
                 } else {
                     return `.${sourceName}`;
@@ -335,6 +335,7 @@ export namespace Debugger {
                     isEscaped = false;
                 }
             } else if (char === '"' || char === "'") {
+                //TODO: Handle bracket string types ([[foo]], [=[bar]=], etc...)
                 inQuote = char;
             } else {
                 const [nameChar] = char.match("[^\"'`~!@#%%^&*%(%)%-+=%[%]{}|\\/<>,%.:;%s]");
