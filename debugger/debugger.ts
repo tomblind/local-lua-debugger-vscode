@@ -1078,7 +1078,7 @@ export namespace Debugger {
             threadStackOffsets.set(activeThread, 1);
             const results = luaCoroutineResume(thread, ...args);
             if (!results[0]) {
-                breakForError(results[1], 1, true);
+                breakForError(results[1], 2, true);
             }
             threadStackOffsets.delete(activeThread);
             return unpack(results, 2);
