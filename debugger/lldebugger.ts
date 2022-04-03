@@ -63,7 +63,13 @@ export function runFile(filePath: unknown, breakImmediately?: boolean, arg?: unk
     if (breakImmediately !== undefined && typeof breakImmediately !== "boolean") {
         throw `expected boolean as second argument to runFile, but got '${type(breakImmediately)}'`;
     }
-    const env = setmetatable({arg}, {__index: _G});
+    const env = setmetatable(
+        {arg},
+        {
+            __index: _G,
+            __newindex: (self: unknown, key: keyof typeof _G, value: unknown) => { _G[key] = value; }
+        }
+    );
     const [func] = luaAssert(...loadLuaFile(filePath, env));
     return Debugger.debugFunction(func as Debugger.DebuggableFunction, breakImmediately, arg ?? []);
 }
