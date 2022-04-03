@@ -1,3 +1,10 @@
+## Version 0.3.3
+- Added support for utf8 identifier names
+- Implemented pipe communication as an alternative to using stdio (use `"communication": "pipe"` under `"program"`)
+- No longer stepping into Lua when a sourcemap exists but the line is not mapped (use stepUnmappedLines for old behavior)
+- Ensuring child processes are killed on Linux
+- Fixed many bugs and improved visualization of some expressions
+
 ## Version 0.3.2
 - Added `ignorePatterns` option to skip over specified files when stepping (useful for busted)
 - Allowed `scriptFiles` to work with leading relative paths (`./`)
