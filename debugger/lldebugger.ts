@@ -28,8 +28,14 @@ declare const ____exports: unknown;
 _G.lldebugger = _G.lldebugger || ____exports;
 
 //Don't buffer io
-io.stdout.setvbuf("no");
-io.stderr.setvbuf("no");
+// eslint-disable-next-line
+if (io.stdout) {
+    io.stdout.setvbuf("no");
+}
+// eslint-disable-next-line
+if (io.stderr) {
+    io.stderr.setvbuf("no");
+}
 
 //Start debugger globally
 export function start(breakImmediately?: boolean): void {
