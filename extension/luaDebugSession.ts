@@ -378,6 +378,28 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.sendResponse(response);
     }
 
+    protected async sourceRequest(
+        response: DebugProtocol.SourceResponse,
+        args: DebugProtocol.SourceArguments,
+    ): Promise<void> {
+        if (args.source?.adapterData === "tarantool-builtin-data") {
+            const msg = await this.waitForCommandResponse(`tarantool-builtin-data ${args.source.path ?? ""}`);
+            if (msg.type === "result") {
+                const result = msg.results[0];
+                if (result.type === "string") {
+                    let content = result.value ?? "";
+
+                    content = content.replace(/^"/, "");
+                    content = content.replace(/"$/, "");
+
+                    response.body = {content};
+                }
+            }
+        }
+
+        this.sendResponse(response);
+    }
+
     protected async stackTraceRequest(
         response: DebugProtocol.StackTraceResponse,
         args: DebugProtocol.StackTraceArguments
@@ -414,7 +436,17 @@ export class LuaDebugSession extends LoggingDebugSession {
                 //Un-mapped source
                 const sourcePath = this.resolvePath(frame.source);
                 if (typeof source === "undefined" && typeof sourcePath !== "undefined") {
-                    source = new Source(path.basename(frame.source), sourcePath);
+                    if (sourcePath.indexOf("builtin/") === 0) {
+                        source = new Source(
+                            path.basename(frame.source),
+                            this.convertDebuggerPathToClient(sourcePath),
+                            1,
+                            "internal module",
+                            "tarantool-builtin-data"
+                        );
+                    } else {
+                        source = new Source(path.basename(frame.source), sourcePath);
+                    }
                 }
 
                 //Function name
@@ -761,6 +793,10 @@ export class LuaDebugSession extends LoggingDebugSession {
     private resolvePath(filePath: string) {
         if (filePath.length === 0) {
             return;
+        }
+
+        if (filePath.indexOf("builtin/") === 0) {
+            return filePath;
         }
 
         const config = this.assert(this.config);

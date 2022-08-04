@@ -97,7 +97,7 @@ const configurationProvider: vscode.DebugConfigurationProvider = {
             return abortLaunch("No path for debugger");
         }
 
-        const extension = vscode.extensions.getExtension("tomblind.local-lua-debugger-vscode");
+        const extension = vscode.extensions.getExtension("usenko-timur.tarantool-local-lua-debugger-vscode");
         if (typeof extension === "undefined") {
             return abortLaunch("Failed to find extension path");
         }

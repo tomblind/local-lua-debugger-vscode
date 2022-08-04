@@ -1,218 +1,219 @@
 {
-    "name": "local-lua-debugger-vscode",
-    "publisher": "tomblind",
-    "version": "0.3.3",
-    "description": "Local Lua Debugger - simple Lua debugger with no dependencies",
-    "displayName": "Local Lua Debugger",
-    "icon": "resources/Lua-Logo_128x128.png",
-    "repository": {
-        "type": "github",
-        "url": "https://github.com/tomblind/local-lua-debugger-vscode.git"
-    },
-    "author": "tomblind@users.noreply.github.com",
-    "license": "MIT",
-    "categories": [
-        "Debuggers"
+  "name": "tarantool-local-lua-debugger-vscode",
+  "publisher": "usenko-timur",
+  "version": "0.3.3",
+  "description": "Tarantool Local Lua Debugger - tarantool local lua debugger with no dependencies",
+  "displayName": "Tarantool Local Lua Debugger",
+  "icon": "resources/tarantool-logo-small_128x128.png",
+  "repository": {
+    "type": "github",
+    "url": "https://github.com/usenko-timur/tarantool-local-lua-debugger-vscode.git"
+  },
+  "author": "usenko-timur@users.noreply.github.com",
+  "license": "MIT",
+  "categories": [
+    "Debuggers"
+  ],
+  "keywords": [
+    "lua",
+    "luajit",
+    "tstl",
+    "typescripttolua",
+    "typescript-to-lua",
+    "love",
+    "löve",
+    "corona",
+    "tarantool"
+  ],
+  "scripts": {
+    "lint-debugger": "cd debugger && eslint . && cd ..",
+    "lint-extension": "cd extension && eslint . && cd ..",
+    "lint": "npm run lint-debugger && npm run lint-extension",
+    "build-debugger": "tstl -p debugger",
+    "build-extension": "tsc -p extension",
+    "build": "npm run build-debugger && npm run build-extension",
+    "bundle": "npm run clean && npm run lint && npm run build && vsce package",
+    "publish": "npm run bundle && vsce publish",
+    "clean": "rm -f debugger/*.lua && rm -f debugger/*.lua.map && rm -f extension/*.js && rm -f extension/*.js.map && rm -f *.vsix"
+  },
+  "dependencies": {
+    "vscode-debugadapter": "^1.48.0"
+  },
+  "devDependencies": {
+    "@types/node": "^16.4.13",
+    "@types/vscode": "^1.44.0",
+    "@typescript-eslint/eslint-plugin": "^4.29.1",
+    "@typescript-eslint/parser": "^4.29.1",
+    "eslint": "^7.32.0",
+    "typescript": "^4.3.5",
+    "typescript-to-lua": "^1.1.1",
+    "vsce": "^1.96.1"
+  },
+  "main": "./extension/extension.js",
+  "engines": {
+    "vscode": "^1.44.0"
+  },
+  "activationEvents": [
+    "onDebug"
+  ],
+  "contributes": {
+    "configuration": [
+      {
+        "title": "Local Lua Debugger",
+        "properties": {
+          "lua-local.interpreter": {
+            "type": "string",
+            "default": "",
+            "description": "Lua stand-alone interpreter to use when none is specified in launch.json"
+          }
+        }
+      }
     ],
-    "keywords": [
-        "lua",
-        "luajit",
-        "tstl",
-        "typescripttolua",
-        "typescript-to-lua",
-        "love",
-        "löve",
-        "corona"
+    "breakpoints": [
+      {
+        "language": "lua"
+      }
     ],
-    "scripts": {
-        "lint-debugger": "cd debugger && eslint . && cd ..",
-        "lint-extension": "cd extension && eslint . && cd ..",
-        "lint": "npm run lint-debugger && npm run lint-extension",
-        "build-debugger": "tstl -p debugger",
-        "build-extension": "tsc -p extension",
-        "build": "npm run build-debugger && npm run build-extension",
-        "bundle": "npm run clean && npm run lint && npm run build && vsce package",
-        "publish": "npm run bundle && vsce publish",
-        "clean": "rm -f debugger/*.lua && rm -f debugger/*.lua.map && rm -f extension/*.js && rm -f extension/*.js.map && rm -f *.vsix"
-    },
-    "dependencies": {
-        "vscode-debugadapter": "^1.48.0"
-    },
-    "devDependencies": {
-        "@types/node": "^16.4.13",
-        "@types/vscode": "^1.44.0",
-        "@typescript-eslint/eslint-plugin": "^4.29.1",
-        "@typescript-eslint/parser": "^4.29.1",
-        "eslint": "^7.32.0",
-        "typescript": "^4.3.5",
-        "typescript-to-lua": "^1.1.1",
-        "vsce": "^1.96.1"
-    },
-    "main": "./extension/extension.js",
-    "engines": {
-        "vscode": "^1.44.0"
-    },
-    "activationEvents": [
-        "onDebug"
-    ],
-    "contributes": {
-        "configuration": [
-            {
-                "title": "Local Lua Debugger",
-                "properties": {
-                    "lua-local.interpreter": {
+    "debuggers": [
+      {
+        "type": "lua-local",
+        "label": "Local Lua Debugger",
+        "program": "./extension/debugAdapter.js",
+        "runtime": "node",
+        "languages": [
+          "lua"
+        ],
+        "initialConfigurations": [
+          {
+            "name": "Debug Lua Interpreter",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+              "lua": "lua",
+              "file": "${file}"
+            }
+          },
+          {
+            "name": "Debug Custom Lua Environment",
+            "type": "lua-local",
+            "request": "launch",
+            "program": {
+              "command": "command"
+            },
+            "args": []
+          }
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "scriptRoots": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Alternate paths to find lua scripts"
+              },
+              "breakInCoroutines": {
+                "type": "boolean",
+                "description": "Break on errors inside of coroutines",
+                "default": true
+              },
+              "scriptFiles": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Glob pattern specifying Lua scripts to be debugged (required for breakpoints in source mapped files)"
+              },
+              "ignorePatterns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Lua patterns specifying scripts to be ignored when stepping"
+              },
+              "stepUnmappedLines": {
+                "type": "boolean",
+                "description": "Step into lua when stepping through unmapped lines in source-mapped files",
+                "default": true
+              },
+              "verbose": {
+                "type": "boolean",
+                "description": "Enable verbose output",
+                "default": false
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Pause debugging as soon as debugger attaches to program",
+                "default": false
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory to launch Lua in",
+                "default": "${workspaceFolder}"
+              },
+              "env": {
+                "type": "object",
+                "description": "Environment variables to set",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Arguments to pass to the program",
+                "default": []
+              },
+              "program": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "lua": {
                         "type": "string",
-                        "default": "",
-                        "description": "Lua stand-alone interpreter to use when none is specified in launch.json"
-                    }
-                }
-            }
-        ],
-        "breakpoints": [
-            {
-                "language": "lua"
-            }
-        ],
-        "debuggers": [
-            {
-                "type": "lua-local",
-                "label": "Local Lua Debugger",
-                "program": "./extension/debugAdapter.js",
-                "runtime": "node",
-                "languages": [
-                    "lua"
-                ],
-                "initialConfigurations": [
-                    {
-                        "name": "Debug Lua Interpreter",
-                        "type": "lua-local",
-                        "request": "launch",
-                        "program": {
-                            "lua": "lua",
-                            "file": "${file}"
-                        }
+                        "description": "Lua stand-alone interpreter to use",
+                        "default": "lua"
+                      },
+                      "file": {
+                        "type": "string",
+                        "description": "The entry point file of the program",
+                        "default": "${file}"
+                      },
+                      "communication": {
+                        "enum": ["stdio", "pipe"],
+                        "description": "Communication method between extension and debugger.",
+                        "default": "stdio"
+                      }
                     },
-                    {
-                        "name": "Debug Custom Lua Environment",
-                        "type": "lua-local",
-                        "request": "launch",
-                        "program": {
-                            "command": "command"
-                        },
-                        "args": []
-                    }
-                ],
-                "configurationAttributes": {
-                    "launch": {
-                        "properties": {
-                            "scriptRoots": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "description": "Alternate paths to find lua scripts"
-                            },
-                            "breakInCoroutines": {
-                                "type": "boolean",
-                                "description": "Break on errors inside of coroutines",
-                                "default": true
-                            },
-                            "scriptFiles": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "description": "Glob pattern specifying Lua scripts to be debugged (required for breakpoints in source mapped files)"
-                            },
-                            "ignorePatterns": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "description": "Lua patterns specifying scripts to be ignored when stepping"
-                            },
-                            "stepUnmappedLines": {
-                                "type": "boolean",
-                                "description": "Step into lua when stepping through unmapped lines in source-mapped files",
-                                "default": true
-                            },
-                            "verbose": {
-                                "type": "boolean",
-                                "description": "Enable verbose output",
-                                "default": false
-                            },
-                            "stopOnEntry": {
-                                "type": "boolean",
-                                "description": "Pause debugging as soon as debugger attaches to program",
-                                "default": false
-                            },
-                            "cwd": {
-                                "type": "string",
-                                "description": "Working directory to launch Lua in",
-                                "default": "${workspaceFolder}"
-                            },
-                            "env": {
-                                "type": "object",
-                                "description": "Environment variables to set",
-                                "additionalProperties": {
-                                    "type": "string"
-                                }
-                            },
-                            "args": {
-                                "type": "array",
-                                "items": {
-                                    "type": "string"
-                                },
-                                "description": "Arguments to pass to the program",
-                                "default": []
-                            },
-                            "program": {
-                                "oneOf": [
-                                    {
-                                        "type": "object",
-                                        "properties": {
-                                            "lua": {
-                                                "type": "string",
-                                                "description": "Lua stand-alone interpreter to use",
-                                                "default": "lua"
-                                            },
-                                            "file": {
-                                                "type": "string",
-                                                "description": "The entry point file of the program",
-                                                "default": "${file}"
-                                            },
-                                            "communication": {
-                                                "enum": ["stdio", "pipe"],
-                                                "description": "Communication method between extension and debugger.",
-                                                "default": "stdio"
-                                            }
-                                        },
-                                        "additionalProperties": false
-                                    },
-                                    {
-                                        "type": "object",
-                                        "properties": {
-                                            "command": {
-                                                "type": "string",
-                                                "description": "The custom command to run"
-                                            },
-                                            "communication": {
-                                                "enum": ["stdio", "pipe"],
-                                                "description": "Communication method between extension and debugger.",
-                                                "default": "stdio"
-                                            }
-                                        },
-                                        "required": [
-                                            "command"
-                                        ],
-                                        "additionalProperties": false
-                                    }
-                                ]
-                            }
-                        }
-                    }
-                }
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "command": {
+                        "type": "string",
+                        "description": "The custom command to run"
+                      },
+                      "communication": {
+                        "enum": ["stdio", "pipe"],
+                        "description": "Communication method between extension and debugger.",
+                        "default": "stdio"
+                      }
+                    },
+                    "required": [
+                      "command"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
             }
-        ]
-    }
+          }
+        }
+      }
+    ]
+  }
 }

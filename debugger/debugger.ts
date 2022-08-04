@@ -504,7 +504,19 @@ export namespace Debugger {
 
             } else if (inp === "cont" || inp === "continue") {
                 break;
-
+            } else if (inp.sub(1, 23) === "tarantool-builtin-data ") {
+                const path = inp.sub(24);
+                if (!path) {
+                    Send.error(`Bad expression: ${inp}`);
+                } else {
+                    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+                    const content: string | null = tarantool_builtin_module(`@${path}`);
+                    if (typeof content === "string") {
+                        Send.result(content);
+                    } else {
+                        Send.error(`Nullable tarantool_builtin_module response: @${path}`);
+                    }
+                }
             } else if (inp === "autocont" || inp === "autocontinue") {
                 updateHook();
                 inDebugBreak = false;
