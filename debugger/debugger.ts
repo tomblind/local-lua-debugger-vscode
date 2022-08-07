@@ -76,6 +76,22 @@ export namespace Debugger {
         inputFile = io.stdin;
     }
 
+    const pullFileEnv: LuaDebug.PullFileEnv = "LOCAL_LUA_DEBUGGER_PULL_FILE";
+    const pullFilePath = os.getenv(pullFileEnv);
+    let lastPullSeek = 0;
+    let pullFile: LuaFile | null;
+    if (pullFilePath && pullFilePath.length > 0) {
+        const [file, err] = io.open(pullFilePath, "r+");
+        if (!file) {
+            luaError(`Failed to open pull file "${pullFilePath}": ${err}\n`);
+        }
+        pullFile = file as LuaFile;
+        pullFile.setvbuf("no");
+        lastPullSeek = pullFile.seek("end")[0] as number;
+    } else {
+        pullFile = null;
+    }
+
     let skipNextBreak = false;
 
     const enum HookType {
@@ -1249,6 +1265,16 @@ export namespace Debugger {
             skipNextBreak = true;
             const message = mapSources(tostring(results[1]));
             return luaError(message, 2);
+        }
+    }
+
+    export function pullBreakpoints(): void {
+        if (pullFile) {
+            const newPullSeek = pullFile.seek("end")[0] as number;
+            if (newPullSeek > lastPullSeek) {
+                lastPullSeek = newPullSeek;
+                triggerBreak();
+            }
         }
     }
 }

@@ -119,4 +119,5 @@ declare namespace LuaDebug {
     type StepUnmappedLinesEnv = "LOCAL_LUA_DEBUGGER_STEP_UNMAPPED_LINES";
     type InputFileEnv = "LOCAL_LUA_DEBUGGER_INPUT_FILE";
     type OutputFileEnv = "LOCAL_LUA_DEBUGGER_OUTPUT_FILE";
+    type PullFileEnv = "LOCAL_LUA_DEBUGGER_PULL_FILE";
 }
