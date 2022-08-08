@@ -120,7 +120,7 @@
                             "pullBreakpointsSupport": {
                                 "type": "boolean",
                                 "description": "Runtime supports pulling of breakpoints. (need to periodically call lldebugger.pullBreakpoints())",
-                                "default": true
+                                "default": false
                             },
                             "scriptFiles": {
                                 "type": "array",
