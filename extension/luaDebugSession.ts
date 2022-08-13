@@ -147,6 +147,7 @@ export class LuaDebugSession extends LoggingDebugSession {
     private autoContinueNext = false;
     private readonly activeThreads = new Map<number, Thread>();
     private isRunning = false;
+    private inDebuggerBreakpoint = false;
     private pullBreakpointsSupport = false;
     private usePipeCommutication = false;
 
@@ -325,6 +326,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         this.process.on("exit", (code, signal) => this.onDebuggerTerminated(`${code !== null ? code : signal}`));
 
         this.isRunning = true;
+        this.inDebuggerBreakpoint = false;
 
         this.showOutput("process launched", OutputCategory.Info);
         this.sendResponse(response);
@@ -339,7 +341,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         const filePath = args.source.path as string;
 
         if (this.process !== null && !this.isRunning) {
-            if (this.pullBreakpointsSupport) {
+            if (!this.inDebuggerBreakpoint && this.pullBreakpointsSupport) {
                 this.breakpointsPending = true;
                 this.autoContinueNext = true;
                 this.debugPipe?.requestPull();
@@ -359,7 +361,13 @@ export class LuaDebugSession extends LoggingDebugSession {
             }
 
         } else {
-            this.breakpointsPending = true;
+            if (this.pullBreakpointsSupport && this.process !== null) {
+                this.breakpointsPending = true;
+                this.autoContinueNext = true;
+                this.debugPipe?.requestPull();
+            } else {
+                this.breakpointsPending = true;
+            }
         }
 
         this.fileBreakpoints[filePath] = args.breakpoints;
@@ -574,6 +582,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (this.sendCommand("cont")) {
             this.variableHandles.reset();
             this.isRunning = true;
+            this.inDebuggerBreakpoint = false;
         } else {
             response.success = false;
         }
@@ -585,6 +594,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (this.sendCommand("step")) {
             this.variableHandles.reset();
             this.isRunning = true;
+            this.inDebuggerBreakpoint = false;
         } else {
             response.success = false;
         }
@@ -596,6 +606,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (this.sendCommand("stepin")) {
             this.variableHandles.reset();
             this.isRunning = true;
+            this.inDebuggerBreakpoint = false;
         } else {
             response.success = false;
         }
@@ -607,6 +618,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         if (this.sendCommand("stepout")) {
             this.variableHandles.reset();
             this.isRunning = true;
+            this.inDebuggerBreakpoint = false;
         } else {
             response.success = false;
         }
@@ -702,6 +714,7 @@ export class LuaDebugSession extends LoggingDebugSession {
         }
 
         this.isRunning = false;
+        this.inDebuggerBreakpoint = false;
 
         this.sendResponse(response);
     }
@@ -839,6 +852,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
     private async onDebuggerStop(msg: LuaDebug.DebugBreak) {
         this.isRunning = false;
+        this.inDebuggerBreakpoint = true;
 
         if (this.pendingScripts) {
             for (const scriptFile of this.pendingScripts) {
@@ -947,6 +961,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
         this.process = null;
         this.isRunning = false;
+        this.inDebuggerBreakpoint = false;
 
         if (this.outputText.length > 0) {
             this.showOutput(this.outputText, OutputCategory.StdOut);
