@@ -20,7 +20,7 @@
 //OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //SOFTWARE.
 
-import {luaError, luaLenMetamethodSupported, luaRawLen} from "./luafuncs";
+import {luaAssert, luaError, luaLenMetamethodSupported, luaRawLen} from "./luafuncs";
 import {Format} from "./format";
 import {Vars} from "./debugger";
 import {Thread, mainThread, mainThreadName} from "./thread";
@@ -193,6 +193,37 @@ export namespace Send {
                     dbgProperties.length = {type: type(tblLen), value: tostring(tblLen)};
                 }
             }
+        }
+        send(dbgProperties);
+    }
+
+    function getUpvalues(info: debug.FunctionInfo): { [name: string]: unknown } {
+        const ups: { [name: string]: unknown } = { };
+
+        if (!info.nups || !info.func) {
+            return ups;
+        }
+
+        for (const index of $range(1, info.nups)) {
+            const [name, val] = debug.getupvalue(info.func, index);
+            ups[luaAssert(name)] = val;
+        }
+
+        return ups;
+    }
+
+    // eslint-disable-next-line @typescript-eslint/ban-types
+    export function functionUpvalues(f: Function): void {
+        const dbgProperties: LuaDebug.Properties = {
+            tag: "$luaDebug",
+            type: "properties",
+            properties: Format.makeExplicitArray()
+        };
+        const upvalues = getUpvalues(debug.getinfo(f, "fu") as debug.FunctionInfo);
+        for (const [key, val] of pairs(upvalues)) {
+            const name = getPrintableValue(key);
+            const dbgVar = buildVariable(name, val);
+            table.insert(dbgProperties.properties, dbgVar);
         }
         send(dbgProperties);
     }

@@ -692,7 +692,7 @@ export class LuaDebugSession extends LoggingDebugSession {
                 return {success: true, value: "nil", variablesReference: 0};
             } else if (msg.results.length === 1) {
                 const result = msg.results[0];
-                const variablesReference = result.type === "table" ? this.variableHandles.create(expression) : 0;
+                const variablesReference = (result.type === "table" || result.type === "function") ? this.variableHandles.create(expression) : 0;
                 return {success: true, value: this.getValueString(result), variablesReference};
             } else {
                 const variablesReference = this.variableHandles.create(`@({${expression}})`);

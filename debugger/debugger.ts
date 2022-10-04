@@ -751,8 +751,11 @@ export namespace Debugger {
                     if (s) {
                         if (type(r) === "table") {
                             Send.props(r as AnyTable, kind, tonumber(first), tonumber(count));
+                        } else if (type(r) === "function") {
+                            // eslint-disable-next-line @typescript-eslint/ban-types
+                            Send.functionUpvalues(r as Function);
                         } else {
-                            Send.error(`Expression "${mappedExpression}" is not a table`);
+                            Send.error(`Expression "${mappedExpression}" is not a table nor a function`);
                         }
                     } else {
                         Send.error(r as string);
