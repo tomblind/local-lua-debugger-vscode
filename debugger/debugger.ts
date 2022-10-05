@@ -821,25 +821,7 @@ export namespace Debugger {
     }
 
     function comparePaths(a: string, b: string) {
-        let aLen = a.length;
-        const bLen = b.length;
-        if (aLen === bLen) {
-            return a === b;
-        }
-        //Ensure 'a' is the shorter path
-        if (bLen < aLen) {
-            [a, aLen, b] = [b, bLen, a];
-        }
-        if (a !== b.sub(-aLen)) {
-            return false;
-        }
-        //If shorter string doesn't start with '/', make sure the longer one has '/' right before the substring
-        //so we don't match a partial filename.
-        if (a.sub(1, 1) === Path.separator) {
-            return true;
-        }
-        const bSep = -(aLen + 1);
-        return b.sub(bSep, bSep) === Path.separator;
+        return Path.getAbsolute(a) === Path.getAbsolute(b);
     }
 
     const debugHookStackOffset = 2;
