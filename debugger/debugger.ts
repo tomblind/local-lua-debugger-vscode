@@ -1163,6 +1163,16 @@ export namespace Debugger {
                 }
             }
         }
+
+        debug.setmetatable(() => { }, {
+            __index(key: string) {
+                const info = debug.getinfo(this, "fu");
+                if (!info) return undefined;
+                const val = getUpvalues(info).vars[key];
+                if (!val) return undefined;
+                return val.val;
+            }
+        });
     };
 
     export function clearHook(): void {
@@ -1183,6 +1193,8 @@ export namespace Debugger {
                 debug.sethook(thread);
             }
         }
+
+        debug.setmetatable(() => { }, undefined);
     }
 
     const breakInCoroutinesEnv: LuaDebug.BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
