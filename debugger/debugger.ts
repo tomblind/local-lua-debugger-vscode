@@ -751,8 +751,11 @@ export namespace Debugger {
                     if (s) {
                         if (type(r) === "table") {
                             Send.props(r as AnyTable, kind, tonumber(first), tonumber(count));
+                        } else if (type(r) === "function") {
+                            // eslint-disable-next-line @typescript-eslint/ban-types
+                            Send.functionUpvalues(r as Function);
                         } else {
-                            Send.error(`Expression "${mappedExpression}" is not a table`);
+                            Send.error(`Expression "${mappedExpression}" is not a table nor a function`);
                         }
                     } else {
                         Send.error(r as string);
@@ -1160,6 +1163,16 @@ export namespace Debugger {
                 }
             }
         }
+
+        debug.setmetatable(() => { }, {
+            __index(key: string) {
+                const info = debug.getinfo(this, "fu");
+                if (!info) return undefined;
+                const val = getUpvalues(info).vars[key];
+                if (!val) return undefined;
+                return val.val;
+            }
+        });
     };
 
     export function clearHook(): void {
@@ -1180,6 +1193,8 @@ export namespace Debugger {
                 debug.sethook(thread);
             }
         }
+
+        debug.setmetatable(() => { }, undefined);
     }
 
     const breakInCoroutinesEnv: LuaDebug.BreakInCoroutinesEnv = "LOCAL_LUA_DEBUGGER_BREAK_IN_COROUTINES";
