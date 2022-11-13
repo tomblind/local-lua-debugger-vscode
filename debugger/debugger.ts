@@ -491,6 +491,7 @@ export namespace Debugger {
     let breakAtDepth = -1;
     let breakInThread: Thread | undefined;
     let updateHook: { (): void };
+    let isDebugHookDisabled = true;
     let ignorePatterns: string[] | undefined;
     let inDebugBreak = false;
 
@@ -864,6 +865,10 @@ export namespace Debugger {
     const skipUnmappedLines = (os.getenv(stepUnmappedLinesEnv) !== "1");
 
     function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
+        if (isDebugHookDisabled) {
+            return;
+        }
+        
         //Stepping
         if (breakAtDepth >= 0) {
             const activeThread = getActiveThread();
@@ -1159,7 +1164,10 @@ export namespace Debugger {
     }
 
     updateHook = function() {
-        if (breakAtDepth < 0 && Breakpoint.getCount() === 0) {
+        isDebugHookDisabled = breakAtDepth < 0 && Breakpoint.getCount() === 0;
+        // Do not disable debugging in luajit environment with pull breakpoints support enabled
+        // or functions will be jitted and will lose debug info of lines and files
+        if (isDebugHookDisabled && (_G['jit'] === null || pullFile == null)) {
             debug.sethook();
 
             for (const [thread] of pairs(threadIds)) {
@@ -1189,6 +1197,7 @@ export namespace Debugger {
         coroutine.wrap = luaCoroutineWrap;
         coroutine.resume = luaCoroutineResume;
 
+        isDebugHookDisabled = true;
         debug.sethook();
 
         for (const [thread] of pairs(threadIds)) {
