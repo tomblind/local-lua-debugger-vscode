@@ -87,7 +87,12 @@ export namespace Debugger {
         }
         pullFile = file as LuaFile;
         pullFile.setvbuf("no");
-        lastPullSeek = pullFile.seek("end")[0] as number;
+        const [fileSize, errorSeek] = pullFile.seek("end");
+        if (!fileSize) {
+            luaError(`Failed to read pull file "${pullFilePath}": ${errorSeek}\n`);
+        } else {
+            lastPullSeek = fileSize;
+        }
     } else {
         pullFile = null;
     }
@@ -868,7 +873,7 @@ export namespace Debugger {
         if (isDebugHookDisabled) {
             return;
         }
-        
+
         //Stepping
         if (breakAtDepth >= 0) {
             const activeThread = getActiveThread();
@@ -1167,7 +1172,7 @@ export namespace Debugger {
         isDebugHookDisabled = breakAtDepth < 0 && Breakpoint.getCount() === 0;
         // Do not disable debugging in luajit environment with pull breakpoints support enabled
         // or functions will be jitted and will lose debug info of lines and files
-        if (isDebugHookDisabled && (_G['jit'] === null || pullFile == null)) {
+        if (isDebugHookDisabled && (_G["jit"] === null || pullFile === null)) {
             debug.sethook();
 
             for (const [thread] of pairs(threadIds)) {

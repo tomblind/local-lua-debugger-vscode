@@ -2,6 +2,8 @@ import * as crypto from "crypto";
 import * as net from "net";
 import * as childProcess from "child_process";
 import * as fs from "fs";
+import * as os from "os";
+import * as path from "path";
 
 export interface DebugPipe {
     open: (onData: (data: unknown) => void, onError: (err: unknown) => void) => void;
@@ -11,7 +13,7 @@ export interface DebugPipe {
     requestPull: () => void;
     getOutputPipePath: () => string;
     getInputPipePath: () => string;
-    getPullPipePath: () => string,
+    getPullPipePath: () => string;
 }
 
 export function createNamedPipe(): DebugPipe {
@@ -43,16 +45,15 @@ export function createNamedPipe(): DebugPipe {
             );
             inputPipe.listen(inputPipePath);
         },
-        openPull: (onError: (err: unknown) => void) => 
-        {
+        openPull: (onError: (err: unknown) => void) => {
             if (!onErrorCallback) {
                 onErrorCallback = onError;
             }
 
             pullPipe = net.createServer(
                 stream => {
-                    stream.on("error", err =>{
-                        onError(`error on pull pipe: ${err}`)
+                    stream.on("error", err => {
+                        onError(`error on pull pipe: ${err}`);
                     });
                     pullStream = stream;
                 }
@@ -87,7 +88,16 @@ export function createFifoPipe(): DebugPipe {
     const pipeId = crypto.randomBytes(16).toString("hex");
     const outputPipePath = `/tmp/lldbg_out_${pipeId}`;
     const inputPipePath = `/tmp/lldbg_in_${pipeId}`;
-    const pullPipePath = `/tmp/lldbg_pull_${pipeId}`;
+    let pullPipePath = "";
+
+    const appPrefix = 'lldebugger';
+    try {
+        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), appPrefix));
+        pullPipePath = path.join(tmpDir, "pull.txt");
+    } catch {
+        // handle error
+    }
+
     let outputFd: number | null;
     let inputFd: number | null;
     let pullFd: number | null;
@@ -148,33 +158,22 @@ export function createFifoPipe(): DebugPipe {
             );
         },
 
-        openPull: (onError: (err: unknown) => void) => 
-        {
+        openPull: (onError: (err: unknown) => void) => {
             if (!onErrorCallback) {
                 onErrorCallback = onError;
             }
-            
-            childProcess.exec(
-                `mkfifo ${pullPipePath}`,
-                fifoErr => {
-                    if (fifoErr) {
-                        onError(`error executing mkfifo for input pipe: ${fifoErr}`);
+
+            fs.open(
+                pullPipePath,
+                fs.constants.O_WRONLY | fs.constants.O_CREAT,
+                (fdErr, fd) => {
+                    if (fdErr) {
+                        onError(`error opening input pipe: ${fdErr}`);
                         return;
                     }
 
-                    fs.open(
-                        pullPipePath,
-                        fs.constants.O_WRONLY,
-                        (fdErr, fd) => {
-                            if (fdErr) {
-                                onError(`error opening fifo for pull pipe: ${fdErr}`);
-                                return;
-                            }
-
-                            pullFd = fd;
-                            pullStream = fs.createWriteStream(null as unknown as fs.PathLike, {fd});
-                        }
-                    );
+                    pullFd = fd;
+                    pullStream = fs.createWriteStream(null as unknown as fs.PathLike, {fd});
                 }
             );
         },
@@ -211,7 +210,7 @@ export function createFifoPipe(): DebugPipe {
                     pullPipePath,
                     err => {
                         if (err) {
-                            onErrorCallback?.(`error removing fifo for pull pipe: ${err}`);
+                            onErrorCallback?.(`error removing pull file '${pullPipePath}': ${err}`);
                         }
                     }
                 );

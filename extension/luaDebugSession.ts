@@ -247,7 +247,7 @@ export class LuaDebugSession extends LoggingDebugSession {
             processOptions.env[stepUnmappedLinesEnv] = this.config.stepUnmappedLines ? "1" : "0";
         }
 
-        this.usePipeCommutication = this.config.program.communication === "pipe"
+        this.usePipeCommutication = this.config.program.communication === "pipe";
 
         //Open pipes
         if (this.usePipeCommutication || this.pullBreakpointsSupport) {
@@ -262,14 +262,14 @@ export class LuaDebugSession extends LoggingDebugSession {
                     data => { void this.onDebuggerOutput(data); },
                     err => { this.showOutput(`${err}`, OutputCategory.Error); }
                 );
-    
+
                 processOptions.env[outputFileEnv] = this.debugPipe.getOutputPipePath();
                 processOptions.env[inputFileEnv] = this.debugPipe.getInputPipePath();
             }
         }
 
         if (this.pullBreakpointsSupport) {
-            this.debugPipe?.openPull(err => { this.showOutput(`${err}`, OutputCategory.Error); })
+            this.debugPipe?.openPull(err => { this.showOutput(`${err}`, OutputCategory.Error); });
             processOptions.env[pullFileEnv] = this.debugPipe?.getPullPipePath();
         }
 
@@ -346,7 +346,7 @@ export class LuaDebugSession extends LoggingDebugSession {
                 this.autoContinueNext = true;
                 this.debugPipe?.requestPull();
             }
-            
+
             const oldBreakpoints = this.fileBreakpoints[filePath];
             if (typeof oldBreakpoints !== "undefined") {
                 for (const breakpoint of oldBreakpoints) {
@@ -852,7 +852,7 @@ export class LuaDebugSession extends LoggingDebugSession {
 
     private async onDebuggerStop(msg: LuaDebug.DebugBreak) {
         this.isRunning = false;
-        let prevInDebugger = this.inDebuggerBreakpoint;
+        const prevInDebugger = this.inDebuggerBreakpoint;
         this.inDebuggerBreakpoint = true;
 
         if (this.pendingScripts) {
