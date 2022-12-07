@@ -55,6 +55,11 @@ export function stop(): void {
     Debugger.clearHook();
 }
 
+//Pull breakpoints change
+export function pullBreakpoints(): void {
+    Debugger.pullBreakpoints();
+}
+
 //Load and debug the specified file
 export function runFile(filePath: unknown, breakImmediately?: boolean, arg?: unknown[]): LuaMultiReturn<unknown[]> {
     if (typeof filePath !== "string") {

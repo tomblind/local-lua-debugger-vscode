@@ -76,6 +76,27 @@ export namespace Debugger {
         inputFile = io.stdin;
     }
 
+    const pullFileEnv: LuaDebug.PullFileEnv = "LOCAL_LUA_DEBUGGER_PULL_FILE";
+    const pullFilePath = os.getenv(pullFileEnv);
+    let lastPullSeek = 0;
+    let pullFile: LuaFile | null;
+    if (pullFilePath && pullFilePath.length > 0) {
+        const [file, err] = io.open(pullFilePath, "r+");
+        if (!file) {
+            luaError(`Failed to open pull file "${pullFilePath}": ${err}\n`);
+        }
+        pullFile = file as LuaFile;
+        pullFile.setvbuf("no");
+        const [fileSize, errorSeek] = pullFile.seek("end");
+        if (!fileSize) {
+            luaError(`Failed to read pull file "${pullFilePath}": ${errorSeek}\n`);
+        } else {
+            lastPullSeek = fileSize;
+        }
+    } else {
+        pullFile = null;
+    }
+
     let skipNextBreak = false;
 
     const enum HookType {
@@ -475,6 +496,7 @@ export namespace Debugger {
     let breakAtDepth = -1;
     let breakInThread: Thread | undefined;
     let updateHook: { (): void };
+    let isDebugHookDisabled = true;
     let ignorePatterns: string[] | undefined;
     let inDebugBreak = false;
 
@@ -848,6 +870,10 @@ export namespace Debugger {
     const skipUnmappedLines = (os.getenv(stepUnmappedLinesEnv) !== "1");
 
     function debugHook(event: "call" | "return" | "tail return" | "count" | "line", line?: number) {
+        if (isDebugHookDisabled) {
+            return;
+        }
+
         //Stepping
         if (breakAtDepth >= 0) {
             const activeThread = getActiveThread();
@@ -1143,7 +1169,10 @@ export namespace Debugger {
     }
 
     updateHook = function() {
-        if (breakAtDepth < 0 && Breakpoint.getCount() === 0) {
+        isDebugHookDisabled = breakAtDepth < 0 && Breakpoint.getCount() === 0;
+        // Do not disable debugging in luajit environment with pull breakpoints support enabled
+        // or functions will be jitted and will lose debug info of lines and files
+        if (isDebugHookDisabled && (_G["jit"] === null || pullFile === null)) {
             debug.sethook();
 
             for (const [thread] of pairs(threadIds)) {
@@ -1173,6 +1202,7 @@ export namespace Debugger {
         coroutine.wrap = luaCoroutineWrap;
         coroutine.resume = luaCoroutineResume;
 
+        isDebugHookDisabled = true;
         debug.sethook();
 
         for (const [thread] of pairs(threadIds)) {
@@ -1249,6 +1279,16 @@ export namespace Debugger {
             skipNextBreak = true;
             const message = mapSources(tostring(results[1]));
             return luaError(message, 2);
+        }
+    }
+
+    export function pullBreakpoints(): void {
+        if (pullFile) {
+            const newPullSeek = pullFile.seek("end")[0] as number;
+            if (newPullSeek > lastPullSeek) {
+                lastPullSeek = newPullSeek;
+                triggerBreak();
+            }
         }
     }
 }
