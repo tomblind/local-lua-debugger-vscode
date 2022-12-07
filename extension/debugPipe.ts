@@ -89,18 +89,10 @@ export function createFifoPipe(): DebugPipe {
     const outputPipePath = `/tmp/lldbg_out_${pipeId}`;
     const inputPipePath = `/tmp/lldbg_in_${pipeId}`;
     let pullPipePath = "";
-
-    const appPrefix = 'lldebugger';
-    try {
-        const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), appPrefix));
-        pullPipePath = path.join(tmpDir, "pull.txt");
-    } catch {
-        // handle error
-    }
-
-    let outputFd: number | null;
-    let inputFd: number | null;
-    let pullFd: number | null;
+    let debuggerTmpDir = "";
+    let outputFd: number | null = null;
+    let inputFd: number | null = null;
+    let pullFd: number | null = null;
     let inputStream: fs.WriteStream | null = null;
     let pullStream: fs.WriteStream | null = null;
     let onErrorCallback: ((err: unknown) => void) | null = null;
@@ -163,19 +155,20 @@ export function createFifoPipe(): DebugPipe {
                 onErrorCallback = onError;
             }
 
-            fs.open(
-                pullPipePath,
-                fs.constants.O_WRONLY | fs.constants.O_CREAT,
-                (fdErr, fd) => {
-                    if (fdErr) {
-                        onError(`error opening input pipe: ${fdErr}`);
-                        return;
-                    }
+            const appPrefix = "lldebugger";
+            try {
+                debuggerTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), appPrefix));
+                pullPipePath = path.join(debuggerTmpDir, "pull.txt");
 
-                    pullFd = fd;
-                    pullStream = fs.createWriteStream(null as unknown as fs.PathLike, {fd});
-                }
-            );
+                const fd = fs.openSync(
+                    pullPipePath,
+                    fs.constants.O_WRONLY | fs.constants.O_CREAT
+                );
+                pullFd = fd;
+                pullStream = fs.createWriteStream(null as unknown as fs.PathLike, {fd});
+            } catch (e: unknown) {
+                onErrorCallback(e);
+            }
         },
 
         close: () => {
@@ -203,17 +196,19 @@ export function createFifoPipe(): DebugPipe {
                     }
                 );
             }
-            if (pullFd !== null) {
-                fs.close(pullFd);
-                pullFd = null;
-                fs.rm(
-                    pullPipePath,
-                    err => {
-                        if (err) {
-                            onErrorCallback?.(`error removing pull file '${pullPipePath}': ${err}`);
-                        }
-                    }
-                );
+            inputStream = null;
+            try {
+                if (pullFd !== null) {
+                    fs.close(pullFd);
+                    fs.rmSync(pullPipePath);
+                    pullFd = null;
+                }
+                pullStream = null;
+                if (debuggerTmpDir.length > 0) {
+                    fs.rmdirSync(debuggerTmpDir);
+                }
+            } catch (e: unknown) {
+                onErrorCallback?.(e);
             }
         },
 
